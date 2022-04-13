@@ -1,0 +1,8 @@
+/* 
+    test1.tiny
+    testing simplest tiny program
+*/
+main 
+{
+  OutputNum(1)  
+}.
