@@ -1,0 +1,15 @@
+/* 
+    test4.tiny
+    - multiple variable assignment
+    - addition of variables
+    - InputNum()
+
+*/
+main
+    var a, b, sum;
+{
+    let a <- InputNum()
+    let b <- InputNum()
+    let sum <- a + b
+    OutputNum(sum)  
+}.

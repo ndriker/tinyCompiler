@@ -1,0 +1,10 @@
+/* 
+    test2.tiny
+    - variable assignment
+*/
+main
+    var a;
+{
+    let a <- 1
+    OutputNum(a)  
+}.

@@ -1,0 +1,17 @@
+/* 
+    test6.tiny
+    - multiple variable assignment
+    - conditional statement
+
+*/
+main
+    var a, b;
+{
+    let a <- 1
+    let b <- 2
+    if a < b then
+        OutputNum(a)
+    else
+        OutputNum(b)
+    fi
+}.

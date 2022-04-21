@@ -1,0 +1,14 @@
+/* 
+    test3.tiny
+    - multiple variable assignment
+    - addition of variables
+
+*/
+main
+    var a, b, sum;
+{
+    let a <- 1
+    let b <- 2
+    let sum <- a + b
+    OutputNum(sum)  
+}.

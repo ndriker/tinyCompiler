@@ -1,8 +1,8 @@
 /* 
     test1.tiny
-    testing simplest tiny program
+    - simplest tiny program
 */
 main 
 {
-  OutputNum(1)  
+    OutputNum(1)  
 }.
