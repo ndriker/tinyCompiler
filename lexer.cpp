@@ -5,6 +5,7 @@
 #include <sstream>
 #include <regex>
 #include <vector>
+
 #include "token.h"
 
 void Lexer::setFile(std::string fileName) {
@@ -17,14 +18,46 @@ bool Lexer::isDigit(const char* ch) {
 }
 
 bool Lexer::isLetter(const char* ch) {
-	std::regex reg("[a-zA-Z");
+	std::regex reg("[a-zA-Z]");
 	return std::regex_match(ch, reg);
 }
 
 bool Lexer::isAlphanum(const char* ch) {
-	std::regex reg("[a-zA-Z0-9");
+	std::regex reg("[a-zA-Z0-9]");
 	return std::regex_match(ch, reg);
 }
+
+bool Lexer::isRelationalOpStem(const char* ch) {
+	std::regex reg("[!<>=]");
+	return std::regex_match(ch, reg);
+}
+
+bool Lexer::isKeyword(std::string accumulator) {
+	std::string keywords[14] = {
+		"let",
+		"var",
+		"if",
+		"then",
+		"else",
+		"fi",
+		"while",
+		"do",
+		"od",
+		"void",
+		"function",
+		"call",
+		"return",
+		"main"
+	};
+	for(int i = 0; i < 14; ++i) {
+		if(accumulator.compare(keywords[i]) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+
 
 void Lexer::displayTokens() {
 	std::cout << "Total tokens found: " << tokens.size() << std::endl;
@@ -60,8 +93,7 @@ void Lexer::tokenize() {
 				const char* ch = str.c_str();
 
 				switch (st) {
-					case IDLE:
-					{
+					case IDLE: {
 						if (isDigit(ch)) {
 							st = IN_NUMBER;
 							std::string digit(1, el);
@@ -79,8 +111,7 @@ void Lexer::tokenize() {
 								st = IDLE;
 								accumulator = "";
 							}
-						}
-						else if (isLetter(ch)) {
+						} else if (isLetter(ch)) {
 							st = IN_IDENT;
 							std::string letter(1, el);
 							accumulator.append(letter);
@@ -93,65 +124,148 @@ void Lexer::tokenize() {
 
 							if (!isLetter(nextCh)) {
 								// TODO add keyword checks here!!
+								
+								//if (isKeyword(accumulator)) {
+								//	create keyword
+								//} else {
+								//	create ident
+								//}
 								Token* ident = new Token(IDENT, lineNumber, accumStartIdx, accumulator);
 								tokens.push_back(*ident);
 								st = IDLE;
 								accumulator = "";
 							}
+						}
+						else if (el == '!') {
+							st = SUCC_NOT;
+							std::string not_sym(1, el);
+							accumulator.append(not_sym);
+							accumStartIdx = columnNumber;
+
+							// lookahead
+							char nextEl = line[i + 1];
+							std::string nextStr(1, nextEl);
+							const char* nextCh = nextStr.c_str();
+
+							if (nextCh != "=") {
+								// lexer error
+								st = IDLE;
+								accumulator = "";
+								throw(LexerError("Symbol '!' must be followed by Symbol '='", lineNumber, columnNumber));
+							}
+						} else if (el == '<') {
+							// < is used for both relational op and for assignment
+							// needs special treatment
+							st = SUCC_LT;
+							std::string lt(1, el);
+							accumulator.append(lt);
+							accumStartIdx = columnNumber;
+
+							// lookahead
+							char nextEl = line[i + 1];
+							std::string nextStr(1, nextEl);
+							const char* nextCh = nextStr.c_str();
+
+							if ((nextCh != "-") && (nextCh != "=")) {
+								Token* lessThan = new Token(LT, lineNumber, accumStartIdx, accumulator);
+								tokens.push_back(*lessThan);
+								st = IDLE;
+								accumulator = "";	
+								// possibly rename to aggregator
+							}
+
+						} else if (el == '>') {
+							st = SUCC_GT;
+							std::string gt(1, el);
+							accumulator.append(gt);
+							accumStartIdx = columnNumber;
+
+							// lookahead
+							char nextEl = line[i + 1];
+							std::string nextStr(1, nextEl);
+							const char* nextCh = nextStr.c_str();
+
+							if (nextCh != "=") {
+								Token* greaterThan = new Token(GT, lineNumber, accumStartIdx, accumulator);
+								tokens.push_back(*greaterThan);
+								st = IDLE;
+								accumulator = "";
+							}
+						} else if (el == '=') {
+							st = SUCC_EQ;
+							std::string eq(1, el);
+							accumulator.append(eq);
+							accumStartIdx = columnNumber;
+
+							// lookahead
+							char nextEl = line[i + 1];
+							std::string nextStr(1, nextEl);
+							const char* nextCh = nextStr.c_str();
+
+							if (nextCh != "=") {
+								throw(LexerError("Symbol '=' must be followed by Symbol '='", lineNumber, columnNumber));
+							}
 						} else {
 							switch (el) {
-
 								// punctuation cases
-								case '(':
-								{
+								case '(': {
 									Token* lparen = new Token(L_PAREN, lineNumber, columnNumber, "(");
 									tokens.push_back(*lparen);
-								}
-								break;
-								case ')':
-								{
+								} break;
+								case ')': {
 									Token* rparen = new Token(R_PAREN, lineNumber, columnNumber, ")");
 									tokens.push_back(*rparen);
-								}
-								break;
+								} break;
 								case '{':
 								{
 									Token* lbrace = new Token(L_BRACE, lineNumber, columnNumber, "{");
 									tokens.push_back(*lbrace);
-								}
-								break;
-								case '}':
-								{
+								} break;
+								case '}': {
 									Token* rbrace = new Token(R_BRACE, lineNumber, columnNumber, "}");
 									tokens.push_back(*rbrace);
-								}
-								break;
-								case ',':
-								{
+								} break;
+								case ',': {
 									Token* comma = new Token(COMMA, lineNumber, columnNumber, ",");
 									tokens.push_back(*comma);
-								}
-								break;
-								case ';':
-								{
+								} break;
+								case ';': {
 									Token* semicolon = new Token(SEMICOLON, lineNumber, columnNumber, ";");
 									tokens.push_back(*semicolon);
-								}
-								break;
-								case '.':
-								{
-									Token* period = new Token(SEMICOLON, lineNumber, columnNumber, ".");
+								} break;
+								case '.': {
+									Token* period = new Token(PERIOD, lineNumber, columnNumber, ".");
 									tokens.push_back(*period);
-								}
-								break;
+								} break;
 							}
 						}
-					}
-					break;
-
+					} break;
+					case IN_NUMBER: {
+						if (isDigit(ch)) {
+							st = IN_NUMBER;
+							std::string digit(1, el);
+							accumulator.append(digit);
+							i = i + 1;
+							
+						}
+					} break;
 				}
 			}
-
-
+		}
 	}
+}
+
+// start LexerError implementations
+
+LexerError::LexerError(const std::string & msg, int line_num, int column_num) {
+	error_message = msg;
+	lineNumber = line_num;
+	columnNumber = column_num;
+	std::string ln = std::to_string(lineNumber);
+	std::string cn = std::to_string(columnNumber);
+	errMsg = "Exception: " + msg + ", at " + ln + "[" + cn + "]";
+}
+
+const char* LexerError::what() const throw () {
+	return errMsg.c_str();
 }

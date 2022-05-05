@@ -7,8 +7,7 @@
 #include "parser.h"
 
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
 	std::cout << "Starting compilation...\n";
 	std::string fName = "test01.txt";//argv[0];
 
