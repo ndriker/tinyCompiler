@@ -4,38 +4,38 @@
 #include <string>
 
 enum tokenType {
-	LET			= 0,
-	VAR			= 1,
-	IF			= 2, 
-	THEN		= 3,
-	ELSE		= 4, 
-	FI			= 5,
-	WHILE		= 6, 
-	DO			= 7, 
-	OD			= 8, 
-	VOID		= 9,
-	FUNCTION	= 10, 
-	CALL		= 11, 
-	RETURN		= 12,
-	MAIN		= 13,
-	ADD			= 14,
-	SUB			= 15,
-	MUL			= 16,
-	DIV			= 17,
-	EQ			= 18,
-	NEQ			= 19,
-	LT			= 20,
-	LE			= 21,
-	GT			= 22,
-	GE			= 23,
-	ASSIGN		= 24,
-	L_PAREN		= 25,
-	R_PAREN		= 26,
-	L_BRACE		= 27,
-	R_BRACE		= 28,
-	COMMA		= 29,
-	SEMICOLON	= 30,
-	PERIOD		= 31,
+	LET			= 0, // let
+	VAR			= 1, // var
+	IF			= 2, // if
+	THEN		= 3, // then
+	ELSE		= 4, // else
+	FI			= 5, // fi
+	WHILE		= 6, // while
+	DO			= 7, // do
+	OD			= 8, // od
+	VOID		= 9, // void
+	FUNCTION	= 10,// function
+	CALL		= 11,// call 
+	RETURN		= 12,// return
+	MAIN		= 13,// main
+	ADD			= 14,// +
+	SUB			= 15,// -
+	MUL			= 16,// *
+	DIV			= 17,// /
+	EQ			= 18,// ==
+	NEQ			= 19,// !=
+	LT			= 20,// <
+	LE			= 21,// <=
+	GT			= 22,// >
+	GE			= 23,// >=
+	ASSIGN		= 24,// <-
+	L_PAREN		= 25,// (
+	R_PAREN		= 26,// )
+	L_BRACE		= 27,// {
+	R_BRACE		= 28,// }
+	COMMA		= 29,// ,
+	SEMICOLON	= 30,// ;
+	PERIOD		= 31,// .
 	IDENT		= 32,
 	NUMBER		= 33
 };

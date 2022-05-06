@@ -3,7 +3,7 @@
 #include <iostream>
 
 Token::Token() {
-	type = PLUS;
+	type = ADD;
 	lineNumber = 0;
 	columnNumber = 0;
 	value = "";

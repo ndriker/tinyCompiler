@@ -9,7 +9,7 @@
 
 int main(int argc, char* argv[]) {
 	std::cout << "Starting compilation...\n";
-	std::string fName = "test01.txt";//argv[0];
+	std::string fName = "tests/test7.tiny";//argv[0];
 
 	// Lexer
 	Lexer lex;

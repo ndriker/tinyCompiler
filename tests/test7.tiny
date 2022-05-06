@@ -1,0 +1,39 @@
+/* 
+    test7.tiny
+    - lexer only test
+*/
+
+let
+var
+if
+then
+else
+fi
+while
+do
+od
+void
+function
+call
+return main
++-*/
++
+-
+*
+/
+==
+!=
+<
+<=
+>
+>=
+<-
+(
+)
+{
+}
+,
+;
+.
+hello
+1231412

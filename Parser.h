@@ -6,7 +6,7 @@
 class Parser {
 public:
 	SSAValue Expression();
-	SSAValue 
+	//SSAValue 
 private:
 
 };

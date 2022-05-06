@@ -21,19 +21,21 @@ class Lexer {
 		std::ifstream infile;
 		std::vector<Token> tokens;
 		enum state {
-			IDLE		= 0,
-			IN_NUMBER	= 1,
-			IN_IDENT	= 2,
-			SUCC_NOT	= 3,
-			SUCC_LT		= 4,
-			SUCC_GT		= 5,
-			SUCC_EQ		= 6
+			IDLE		 = 0,
+			IN_NUMBER	 = 1,
+			IN_IDENT	 = 2,
+			SUCC_NOT	 = 3,
+			SUCC_LT		 = 4,
+			SUCC_GT		 = 5,
+			SUCC_EQ		 = 6,
+			IN_COMMENT   = 7,
+			EXIT_COMMENT = 8
 		};
 		bool isDigit(const char* ch);
 		bool isLetter(const char* ch);
 		bool isAlphanum(const char* ch);
 		bool isRelationalOpStem(const char* ch);
-		bool isKeyword(std::string accumulator);
+		int isKeyword(std::string accumulator);
 
 
 };

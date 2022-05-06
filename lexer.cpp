@@ -32,7 +32,7 @@ bool Lexer::isRelationalOpStem(const char* ch) {
 	return std::regex_match(ch, reg);
 }
 
-bool Lexer::isKeyword(std::string accumulator) {
+int Lexer::isKeyword(std::string accumulator) {
 	std::string keywords[14] = {
 		"let",
 		"var",
@@ -51,13 +51,13 @@ bool Lexer::isKeyword(std::string accumulator) {
 	};
 	for(int i = 0; i < 14; ++i) {
 		if(accumulator.compare(keywords[i]) == 0) {
-			return true;
+			return i;
 		}
 	}
-	return false;
+	return -1;
 }
 
-
+	
 
 void Lexer::displayTokens() {
 	std::cout << "Total tokens found: " << tokens.size() << std::endl;
@@ -77,13 +77,16 @@ void Lexer::tokenize() {
 	if (infile.is_open()) {
 		std::string line;
 		int lineNumber = 0;
+		state st = IDLE;
 		while (std::getline(infile, line)) {
 			lineNumber += 1;
 			std::string accumulator = "";
 			int columnNumber = 0;
 			int accumStartIdx = 0;
 
-			state st = IDLE;
+			if (st != IN_COMMENT) {
+				st = IDLE;
+			}
 
 			for (int i = 0; i < line.size(); i++) {
 				columnNumber += 1;
@@ -130,10 +133,19 @@ void Lexer::tokenize() {
 								//} else {
 								//	create ident
 								//}
-								Token* ident = new Token(IDENT, lineNumber, accumStartIdx, accumulator);
-								tokens.push_back(*ident);
-								st = IDLE;
-								accumulator = "";
+								int kwInd = isKeyword(accumulator);
+								if (kwInd == -1) {
+									Token* ident = new Token(IDENT, lineNumber, accumStartIdx, accumulator);
+									tokens.push_back(*ident);
+									st = IDLE;
+									accumulator = "";
+								} else {
+									Token* kw = new Token(static_cast<tokenType>(kwInd), lineNumber, accumStartIdx, accumulator);
+									tokens.push_back(*kw);
+									st = IDLE;
+									accumulator = "";
+								}
+
 							}
 						}
 						else if (el == '!') {
@@ -147,7 +159,7 @@ void Lexer::tokenize() {
 							std::string nextStr(1, nextEl);
 							const char* nextCh = nextStr.c_str();
 
-							if (nextCh != "=") {
+							if (nextStr != "=") {
 								// lexer error
 								st = IDLE;
 								accumulator = "";
@@ -166,11 +178,12 @@ void Lexer::tokenize() {
 							std::string nextStr(1, nextEl);
 							const char* nextCh = nextStr.c_str();
 
-							if ((nextCh != "-") && (nextCh != "=")) {
+							if ((nextStr != "-") && (nextStr != "=")) {
 								Token* lessThan = new Token(LT, lineNumber, accumStartIdx, accumulator);
 								tokens.push_back(*lessThan);
 								st = IDLE;
-								accumulator = "";	
+								accumulator = "";
+								accumStartIdx = 0;
 								// possibly rename to aggregator
 							}
 
@@ -185,11 +198,12 @@ void Lexer::tokenize() {
 							std::string nextStr(1, nextEl);
 							const char* nextCh = nextStr.c_str();
 
-							if (nextCh != "=") {
+							if (nextStr != "=") {
 								Token* greaterThan = new Token(GT, lineNumber, accumStartIdx, accumulator);
 								tokens.push_back(*greaterThan);
 								st = IDLE;
 								accumulator = "";
+								accumStartIdx = 0;
 							}
 						} else if (el == '=') {
 							st = SUCC_EQ;
@@ -202,8 +216,20 @@ void Lexer::tokenize() {
 							std::string nextStr(1, nextEl);
 							const char* nextCh = nextStr.c_str();
 
-							if (nextCh != "=") {
+							if (nextStr != "=") {
 								throw(LexerError("Symbol '=' must be followed by Symbol '='", lineNumber, columnNumber));
+							}
+						} else if (el == '/') {
+							// lookahead
+							char nextEl = line[i + 1];
+							std::string nextStr(1, nextEl);
+							const char* nextCh = nextStr.c_str();
+
+							if (nextStr == "*") {
+								st = IN_COMMENT;
+							} else {
+								Token* divide = new Token(DIV, lineNumber, columnNumber, "/");
+								tokens.push_back(*divide);
 							}
 						} else {
 							switch (el) {
@@ -237,6 +263,24 @@ void Lexer::tokenize() {
 									Token* period = new Token(PERIOD, lineNumber, columnNumber, ".");
 									tokens.push_back(*period);
 								} break;
+							
+								// arithmetic operators
+								case '+': {
+									Token* plus = new Token(ADD, lineNumber, columnNumber, "+");
+									tokens.push_back(*plus);
+								} break;
+								case '-': {
+									Token* minus = new Token(SUB, lineNumber, columnNumber, "-");
+									tokens.push_back(*minus);
+								} break;
+								case '*': {
+									Token* multiply = new Token(MUL, lineNumber, columnNumber, "*");
+									tokens.push_back(*multiply);
+								} break;
+								//case '/': {
+								//	Token* divide = new Token(DIV, lineNumber, columnNumber, "/");
+								//	tokens.push_back(*divide);
+								//} break;
 							}
 						}
 					} break;
@@ -245,8 +289,147 @@ void Lexer::tokenize() {
 							st = IN_NUMBER;
 							std::string digit(1, el);
 							accumulator.append(digit);
-							i = i + 1;
-							
+
+							// lookahead
+							char nextEl = line[i + 1];
+							std::string nextStr = std::string(1, nextEl);
+							const char* nextCh = nextStr.c_str();
+
+							if (!isDigit(nextCh)) {
+								Token* number = new Token(NUMBER, lineNumber, accumStartIdx, accumulator);
+								tokens.push_back(*number);
+								st = IDLE;
+								accumulator = "";
+								accumStartIdx = 0;
+							}
+						}
+
+					} break;
+					case IN_IDENT: {
+						if (isAlphanum(ch)) {
+							st = IN_IDENT;
+							std::string alphanum(1, el);
+							accumulator.append(alphanum);
+
+							//// lookahead
+							char nextEl = line[i + 1];
+							std::string nextStr = std::string(1, nextEl);
+							const char* nextCh = nextStr.c_str();
+
+							if (!isAlphanum(nextCh)) {
+								int kwInd = isKeyword(accumulator);
+								if (kwInd == -1) {
+									Token* ident = new Token(IDENT, lineNumber, accumStartIdx, accumulator);
+									tokens.push_back(*ident);
+									st = IDLE;
+									accumulator = "";
+								}
+								else {
+									Token* kw = new Token(static_cast<tokenType>(kwInd), lineNumber, accumStartIdx, accumulator);
+									tokens.push_back(*kw);
+									st = IDLE;
+									accumulator = "";
+								}
+
+
+								//Token* ident = new Token(IDENT, lineNumber, accumStartIdx, accumulator);
+								//tokens.push_back(*ident);
+								//st = IDLE;
+								//accumulator = "";
+								//accumStartIdx = 0;
+							}
+						}
+					} break;
+					case SUCC_NOT: {
+						// check that current symbol is equal sign
+						// write accumulator
+						// set state to IDLE
+						st = SUCC_NOT;
+
+						if (str == "=") {
+							std::string eq(1, el);
+							accumulator.append(eq);
+
+							Token* notEq = new Token(NEQ, lineNumber, accumStartIdx, accumulator);
+							tokens.push_back(*notEq);
+							st = IDLE;
+							accumulator = "";
+							accumStartIdx = 0;
+						}
+					} break;
+					case SUCC_LT: {
+						st = SUCC_LT;
+
+						if (str == "-") {
+							// output assign
+							std::string dash(1, el);
+							accumulator.append(dash);
+
+							Token* assign = new Token(ASSIGN, lineNumber, accumStartIdx, accumulator);
+							tokens.push_back(*assign);
+							st = IDLE;
+							accumulator = "";
+							accumStartIdx = 0;
+
+						} else if (str == "=") {
+							// output leq
+							std::string eq(1, el);
+							accumulator.append(eq);
+
+							Token* leq = new Token(LE, lineNumber, accumStartIdx, accumulator);
+							tokens.push_back(*leq);
+							st = IDLE;
+							accumulator = "";
+							accumStartIdx = 0;
+						}
+					} break;
+					case SUCC_GT: {
+						st = SUCC_GT;
+
+						if (str == "=") {
+							std::string eq(1, el);
+							accumulator.append(eq);
+
+							Token* geq = new Token(GE, lineNumber, accumStartIdx, accumulator);
+							tokens.push_back(*geq);
+							st = IDLE;
+							accumulator = "";
+							accumStartIdx = 0;
+						}
+					} break;
+					case SUCC_EQ: {
+						st = SUCC_EQ;
+
+						if (str == "=") {
+							std::string eq(1, el);
+							accumulator.append(eq);
+
+							Token* eqeq = new Token(EQ, lineNumber, accumStartIdx, accumulator);
+							tokens.push_back(*eqeq);
+							st = IDLE;
+							accumulator = "";
+							accumStartIdx = 0;
+						}
+					} break;
+					case IN_COMMENT: {
+						st = IN_COMMENT;
+						if (str == "*") {
+
+							// lookahead
+							char nextEl = line[i + 1];
+							std::string nextStr = std::string(1, nextEl);
+							const char* nextCh = nextStr.c_str();
+
+							if (nextStr == "/") {
+								st = EXIT_COMMENT;
+							}
+						}
+					} break;
+					case EXIT_COMMENT: {
+						st = EXIT_COMMENT;
+
+						if (ch == "/") {
+							st = IDLE;
 						}
 					} break;
 				}
@@ -254,6 +437,8 @@ void Lexer::tokenize() {
 		}
 	}
 }
+
+
 
 // start LexerError implementations
 
