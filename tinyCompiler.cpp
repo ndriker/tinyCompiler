@@ -17,8 +17,9 @@ int main(int argc, char* argv[]) {
 	lex.tokenize();
 	lex.displayTokens();
 
-	//// Parser
-	//Parser parser;
-	//parser.setTokens(lex.getTokens());
-	//parser.parse();
+
+	// Parser
+	Parser parser;
+	parser.setTokens(lex.getTokens());
+	parser.parse();
 }

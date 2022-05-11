@@ -2,6 +2,11 @@
 #include <string>
 #include <iostream>
 
+std::string getTextForEnum(int enumVal) {
+	Token* t = new Token();
+	return t->getTextForEnum(enumVal);
+}
+
 Token::Token() {
 	type = ADD;
 	lineNumber = 0;
@@ -36,4 +41,8 @@ void Token::displayToken(int id) {
 
 tokenType Token::getType() {
 	return type;
+}
+
+std::string Token::getValue() {
+	return value;
 }

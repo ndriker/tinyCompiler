@@ -1,25 +1,111 @@
 main 
   var a, b, c, d;
+  function sum(a, b);
+    var c;
+  {
+    let c <- a + b;
+    return c;
+  };
+  void function print(a, b);
+  {
+    call OutputNum(a);
+    call OutputNum(b);
+    return;
+    return
+  };
 {
   let a <- 5;
   let b <- a;
   if a == b then
     let d <- a + 1;
-  fi  
+  fi;  
   if a > b then
     let d <- b * 2;
-  fi  
+  fi; 
   if a < b then
     let d <- b / 2;
-  fi
+  fi;
   let c <- 10;
   while c >= 0 do
     let c <- c - 1;
-  od
+  od;
+
   if c <= 10 then
-    OutputNum(1);
-  fi
+    call OutputNum(1);
+  fi;
+
   if c != 0 then
-    OutputNum(-1);
-  fi
+    call OutputNum(1);
+  fi;
 }.
+/*
+Computation
+    MAIN
+    varDecl
+        var
+        ident
+        comma
+        ident
+        comma
+        ident
+        comma
+        ident
+        semicolon
+    LeftBrace
+    statSequence
+        statement
+            assignment statement
+                let
+                ident
+                assign
+                expression
+                    term
+                        factor
+                            number
+        ;
+        statement
+            assignment statement
+                let
+                ident
+                assign
+                expression
+                    term
+                        factor
+                            var ref
+                                ident
+        ;
+        statement
+            if statement
+                if
+                relation
+                    expression
+                        term
+                            factor
+                                var ref
+                                    ident
+                    ==
+                    expression
+                        term
+                            factor
+                                var ref
+                                    ident
+                then
+                statSequence
+                    statement
+                        assignment statement
+                            let
+                            ident
+                            assign
+                            expression
+                                term
+                                    factor
+                                        var ref
+                                            ident
+                                +
+                                term
+                                    factor
+                                        number
+                    ;
+
+                fi
+*/

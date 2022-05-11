@@ -140,10 +140,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="lexer.cpp" />
+    <ClCompile Include="parser.cpp" />
     <ClCompile Include="tinyCompiler.cpp" />
     <ClCompile Include="token.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="parser.h" />
     <ClInclude Include="token.h" />
     <ClInclude Include="lexer.h" />
   </ItemGroup>

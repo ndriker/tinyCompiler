@@ -40,12 +40,18 @@ enum tokenType {
 	NUMBER		= 33
 };
 
+std::string getTextForEnum(int enumVal);
+
 class Token {
 	public:
 		Token();
 		Token(tokenType type, int ln, int cn, std::string val);
 		void displayToken(int id);
 		tokenType getType();
+		std::string getValue();
+
+		std::string getTextForEnum(int enumVal);
+
 	private:
 		tokenType type;
 		int lineNumber;
@@ -89,7 +95,6 @@ class Token {
 			"NUMBER"
 		};
 
-		std::string getTextForEnum(int enumVal);
 
 };
 
