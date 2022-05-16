@@ -139,13 +139,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="basicBlock.cpp" />
     <ClCompile Include="lexer.cpp" />
     <ClCompile Include="parser.cpp" />
+    <ClCompile Include="ssa.cpp" />
     <ClCompile Include="tinyCompiler.cpp" />
     <ClCompile Include="token.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="basicBlock.h" />
     <ClInclude Include="parser.h" />
+    <ClInclude Include="ssa.h" />
     <ClInclude Include="token.h" />
     <ClInclude Include="lexer.h" />
   </ItemGroup>
