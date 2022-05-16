@@ -7,6 +7,7 @@ SSAValue SSAValue::SSACreate(opcode operation, SSAValue* x, SSAValue* y) {
 	result->op = operation;
 	result->operand1 = x;
 	result->operand2 = y;
+	// test
 
 }
 
