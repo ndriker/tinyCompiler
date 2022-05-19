@@ -19,6 +19,7 @@
 void Parser::setTokens(std::vector<Token> inTokens) {
 	tokens = inTokens;
 	currPos = 0;
+
 }
 
 void Parser::next() {
@@ -59,27 +60,37 @@ void Parser::startPrintBlock(std::string blockName) {
 	std::cout << createIndent() << blockName << std::endl;
 }
 
-void Parser::varRef() {
+SSAValue* Parser::varRef() {
 	startPrintBlock("Var Ref");
-	printItem("Identifier", getCurrentValue());
+
+	std::string ident = getCurrentValue();
+	printItem("Identifier", ident);
+	SSAValue* identInst = ssa.findSymbol(ident);
+
 	next(); // consume ident
 	decPrintInd();
+	return identInst;
 }
 
-void Parser::factor() {
+SSAValue* Parser::factor() {
 	startPrintBlock("Factor");
 
+	SSAValue* left;
+
 	if (sym == IDENT) {
-		varRef();
+		left = varRef();
 	}
 	else if (sym == NUMBER) {
-		printItem("Number", getCurrentValue());
+		std::string numStr = getCurrentValue();
+		printItem("Number", numStr);
+		int num = stoi(numStr);
+		left = ssa.SSACreateConst(num);
 		next();
 	}
 	else if (sym == L_PAREN) {
 		printItem("Left Paren");
 		next();
-		expression();
+		left = expression();
 
 		if (sym == R_PAREN) {
 			printItem("Right Paren");
@@ -91,59 +102,98 @@ void Parser::factor() {
 	}
 	else if (sym == CALL) {
 		funcCall();
+		// TODO
+		left = new SSAValue();
 	}
 	else {
 		error("No Production Exists for your input");
+		// TODO
+		left = new SSAValue();
 	}
 	
 	decPrintInd();
+	return left;
 }
 
-void Parser::term() {
+SSAValue* Parser::term() {
 	startPrintBlock("Term");
-	factor();
+	bool wasMul;
+
+	SSAValue* left;
+	SSAValue* right;
+
+	left = factor();
 	while ((sym == MUL) || (sym == DIV)) {
+		wasMul = (sym == MUL) ? true : false;
 		printItem(getTextForEnum(sym));
 		next();
-		factor();
+		right = factor();
+		if (wasMul) {
+			left = ssa.SSACreate(MULOP, left, right);
+		} else {
+			// sym == div
+			left = ssa.SSACreate(DIVOP, left, right);
+		}
 	}
+
 	decPrintInd();
+	return left;
 }
 
-//void Parser::relOp() {
-//	if ()
-//}
-void Parser::expression() {
+SSAValue* Parser::expression() {
 	startPrintBlock("Expression");
-	term();
+	bool wasAdd;
+	SSAValue* left;
+	SSAValue* right;
+
+	left = term();
 	while ((sym == ADD) || (sym == SUB)) {
+		wasAdd = (sym == ADD) ? true : false;
 		printItem(getTextForEnum(sym));
 		next();
-		term();
+		right = term();
+		if (wasAdd) {
+			left = ssa.SSACreate(ADDOP, left, right);
+		} else {
+			// sym == sub
+			left = ssa.SSACreate(SUBOP, left, right);
+		}
 	}
 	decPrintInd();
+	return left;
 }
 
-void Parser::relation() {
+SSAValue* Parser::relation() {
 	startPrintBlock("Relation");
-	expression();
+	SSAValue* left;
+	SSAValue* right = nullptr;
+	tokenType symCopy;
+	left = expression();
 	if ((sym >= 18) || (sym <= 23)) {
+		symCopy = sym;
 		printItem(getTextForEnum(sym));
 
 		// take sym to know which relational op it is
 		next();
-		expression();
+		right = expression();
 	}
+	SSAValue* cmp = ssa.SSACreate(CMP, left, right);
+	elseHead = ssa.SSACreateNop();
+	SSAValue* rel = ssa.SSACreate(ssa.convertBr(symCopy), cmp, elseHead);
 	decPrintInd();
+	return rel;
 }
 
 void Parser::assignment() {
 	startPrintBlock("Assignment");
+	std::string identName;
+	SSAValue* left;
 	if (sym == LET) {
 		printItem(getTextForEnum(sym));
 		next(); // consume LET
 		if (sym == IDENT) {
-			printItem(getTextForEnum(sym), getCurrentValue());
+			identName = getCurrentValue();
+			printItem(getTextForEnum(sym), identName);
 
 			next(); // consume IDENT
 
@@ -151,7 +201,8 @@ void Parser::assignment() {
 				printItem(getTextForEnum(sym));
 
 				next(); // consume ASSIGN
-				expression();
+				left = expression();
+				ssa.addSymbol(identName, left);
 
 			} else {
 				error("Arrow Error");
@@ -208,8 +259,13 @@ void Parser::funcCall() {
 	decPrintInd();
 }
 
+
 void Parser::ifStatement() {
 	startPrintBlock("If Statement");
+
+	SSAValue* savedElseHead = elseHead;
+	SSAValue* savedJoinBlockHead = joinBlockHead;
+
 	if (sym == IF) {
 		printItem(getTextForEnum(sym));
 		next();
@@ -218,8 +274,11 @@ void Parser::ifStatement() {
 			printItem(getTextForEnum(sym));
 			next();
 			statSequence();
+			joinBlockHead = ssa.SSACreateNop();
+			ssa.SSACreate(BRA, joinBlockHead);
 			
 			if (sym == ELSE) {
+				ssa.updateNop(elseHead, ssa.getTailID() + 1);
 				printItem(getTextForEnum(sym));
 				next();
 				statSequence();
@@ -236,6 +295,10 @@ void Parser::ifStatement() {
 	} else {
 		error("If statement must have 'if'");
 	}
+	ssa.updateNop(joinBlockHead, ssa.getTailID() + 1);
+
+	elseHead = savedElseHead;
+	joinBlockHead = savedJoinBlockHead;
 	decPrintInd();
 }
 
@@ -301,6 +364,7 @@ void Parser::statement() {
 
 void Parser::statSequence() {
 	startPrintBlock("Statement Sequence");
+	ssa.enterScope();
 	statement();
 	while (sym == SEMICOLON) {
 		printItem(getTextForEnum(sym));
@@ -311,7 +375,7 @@ void Parser::statSequence() {
 
 		}
 	}
-
+	ssa.exitScope();
 	decPrintInd();
 }
 
@@ -481,6 +545,7 @@ void Parser::computation() {
 	}
 }
 
+
 void Parser::parse() {
 	std::cout << "Parser is starting..." << std::endl;
 	currentPrintIndent = 0;
@@ -488,4 +553,14 @@ void Parser::parse() {
 	sym = tokens[currPos].getType();
 
 	computation();
+}
+
+void Parser::printSSA() {
+	std::cout << std::endl;
+	ssa.printSSA();
+	std::cout << std::endl;
+	ssa.printSymTable();
+	std::cout << std::endl;
+	ssa.printConstTable();
+	std::cout << std::endl;
 }

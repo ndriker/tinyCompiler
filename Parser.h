@@ -3,7 +3,9 @@
 
 #include <vector>
 #include "token.h"
-//#include "SSAValue.h"
+#include "ssa.h"
+
+
 
 class Parser {
 	public:
@@ -12,11 +14,11 @@ class Parser {
 
 		void setTokens(std::vector<Token> inTokens);
 
-		void varRef();
-		void factor();
-		void term();
-		void expression();
-		void relation();
+		SSAValue* varRef();
+		SSAValue* factor();
+		SSAValue* term();
+		SSAValue* expression();
+		SSAValue* relation();
 
 		void assignment();
 		void funcCall();
@@ -33,19 +35,27 @@ class Parser {
 		void funcBody();
 		void computation();
 
-
-
 		void parse();
+		void printSSA();
 	private:
 		std::vector<Token> tokens;
 		int currPos;
 		tokenType sym;
 		int currentPrintIndent;
+		SSA ssa;
+
+		SSAValue* elseHead;
+		SSAValue* joinBlockHead;
 		void next();
 		std::string getCurrentValue();
 
 		void error(std::string errorMessage);
 
+
+
+
+
+		// functions for printing parse tree
 		std::string createIndent();
 		void incPrintInd();
 		void decPrintInd();

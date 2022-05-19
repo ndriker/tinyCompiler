@@ -9,7 +9,7 @@
 
 int main(int argc, char* argv[]) {
 	std::cout << "Starting compilation...\n";
-	std::string fName = "tests/test7.tiny";//argv[0];
+	std::string fName = "tests/testSSA.tiny";//argv[0];
 
 	// Lexer
 	Lexer lex;
@@ -22,4 +22,6 @@ int main(int argc, char* argv[]) {
 	Parser parser;
 	parser.setTokens(lex.getTokens());
 	parser.parse();
+	parser.printSSA();
+
 }

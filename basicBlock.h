@@ -5,10 +5,7 @@
 
 #include <vector>
 
-typedef struct {
-	std::string varName;
-	SSAValue* inst;
-} vtItem;
+
 
 class BasicBlock {
 	public:
@@ -20,7 +17,7 @@ class BasicBlock {
 		void setNext(BasicBlock* nextBB, int position);
 
 		void setDom(BasicBlock* dom);
-		void addValue(vtItem val);
+		//void addValue(vtItem val);
 		void addInst(SSAValue* newSSAValue);
 		
 
@@ -38,7 +35,7 @@ class BasicBlock {
 
 
 		BasicBlock* dominator;
-		std::vector<vtItem> valueTable;
+		//std::vector<vtItem> valueTable;
 		int instCount;
 };
 

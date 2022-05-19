@@ -1,0 +1,53 @@
+main
+{
+	let a <- 3 + 2;
+	if a > 7 then
+	    let a <- 1;
+	fi;
+}.
+
+
+/*
+main 
+{
+	let a <- (3) + (2);
+	let b <- 6;
+	if a < b then
+		let a <- a - 1;
+		if b > a then
+			let a <- a - 1;
+		fi;
+	else
+		let a <- a + 1;
+	fi;
+
+}.
+
+0:  CONST #3
+1:  CONST #2
+2:  add (0) (1)
+3:  CONST #6
+4:  cmp (2) (3)
+5:  bge (4) ()
+6:  CONST #1
+7:  sub (2) (6)
+8:  cmp (3) (7)
+9:  ble (8) ()
+10: sub (7) (6)
+    nop
+11: add (2) (6)
+    nop
+
+
+
+
+SYM   ID    Scope
+a     (2)   MAIN
+b     (3)   MAIN
+a     (7)   MAIN_IF
+a     (10)  MAIN_IF_IF
+a     (11)  MAIN_ELSE
+
+
+
+*/

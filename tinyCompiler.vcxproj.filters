@@ -30,9 +30,6 @@
     <ClCompile Include="ssa.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="basicBlock.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="parser.h">
@@ -45,9 +42,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ssa.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="basicBlock.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
