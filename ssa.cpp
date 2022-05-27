@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 
+
 // ssa value class
 
 std::string SSAValue::getTextForEnum(int enumVal) {
@@ -83,14 +84,19 @@ SSAValue* SSA::SSACreateNop() {
 	return result;
 }
 
+
 void SSA::updateNop(SSAValue* nopInst, int nopID) {
-	std::cout << "In update nop" << std::endl;
+	//std::cout << "In update nop" << std::endl;
 	nopInst->id = maxID++;
 	addSSAValue(nopInst);
 }
 
 int SSA::getTailID() {
 	return instTail->id;
+}
+
+SSAValue* SSA::getTail() {
+	return instTail;
 }
 
 SSA::SSA() {
@@ -124,9 +130,15 @@ void SSA::enterScope() {
 	scopeDepth = scopeDepth + 1;
 }
 
-void SSA::exitScope() {
+std::unordered_map<std::string, SSAValue*> SSA::exitScope() {
+	std::unordered_map<std::string, SSAValue*> lastScope = symTable.back();
 	symTable.pop_back();
+	//for (auto kv : lastScope) {
+	//	SSAValue* prevOccur = findSymbol(kv.first);	
+	//	phiMap.insert({ prevOccur, kv.second });
+	//}
 	scopeDepth = scopeDepth - 1;
+	return lastScope;
 }
 
 void SSA::addSymbol(std::string name, SSAValue* val) {
@@ -173,7 +185,6 @@ SSAValue* SSA::findConst(int constVal) {
 
 }
 
-
 // ssa debugging functions
 
 
@@ -202,3 +213,5 @@ void SSA::printConstTable() {
 		std::cout << kv.first << "            (" << kv.second->id << ")" << std::endl;
 	}
 }
+
+

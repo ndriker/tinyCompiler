@@ -14,6 +14,7 @@ class Parser {
 
 		void setTokens(std::vector<Token> inTokens);
 
+
 		SSAValue* varRef();
 		SSAValue* factor();
 		SSAValue* term();
@@ -37,6 +38,7 @@ class Parser {
 
 		void parse();
 		void printSSA();
+
 	private:
 		std::vector<Token> tokens;
 		int currPos;
@@ -46,9 +48,15 @@ class Parser {
 
 		SSAValue* elseHead;
 		SSAValue* joinBlockHead;
+
+		std::unordered_map<std::string, SSAValue*> phiMap;
+
+
+		// traversal functions
 		void next();
 		std::string getCurrentValue();
 
+	
 		void error(std::string errorMessage);
 
 

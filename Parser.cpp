@@ -2,6 +2,8 @@
 #include <iostream>
 #include <vector>
 #include "token.h"
+#include <stdexcept>
+
 
 /*
 	NOTES:
@@ -32,6 +34,8 @@ void Parser::next() {
 std::string Parser::getCurrentValue() {
 	return tokens[currPos].getValue();
 }
+
+
 
 void Parser::error(std::string errorMessage) {
 	std::cout << "Parser Error: " << errorMessage << std::endl;
@@ -265,6 +269,8 @@ void Parser::ifStatement() {
 
 	SSAValue* savedElseHead = elseHead;
 	SSAValue* savedJoinBlockHead = joinBlockHead;
+	std::unordered_map<std::string, SSAValue*> savedPhiMap = phiMap;
+
 
 	if (sym == IF) {
 		printItem(getTextForEnum(sym));
@@ -273,15 +279,57 @@ void Parser::ifStatement() {
 		if (sym == THEN) {
 			printItem(getTextForEnum(sym));
 			next();
+
+			phiMap = std::unordered_map<std::string, SSAValue*>();
 			statSequence();
-			joinBlockHead = ssa.SSACreateNop();
-			ssa.SSACreate(BRA, joinBlockHead);
-			
+			std::unordered_map<std::string, SSAValue*> thenPhiMap = phiMap;
+
 			if (sym == ELSE) {
+				joinBlockHead = ssa.SSACreateNop();
+				ssa.SSACreate(BRA, joinBlockHead);
 				ssa.updateNop(elseHead, ssa.getTailID() + 1);
 				printItem(getTextForEnum(sym));
 				next();
+
+				phiMap = std::unordered_map<std::string, SSAValue*>();
+				
 				statSequence();
+				
+				std::unordered_map<std::string, SSAValue*> elsePhiMap = phiMap;
+				
+				ssa.updateNop(joinBlockHead, ssa.getTailID() + 1);
+
+				for (auto kv : thenPhiMap) {
+					try {
+						SSAValue* val = elsePhiMap.at(kv.first);
+						ssa.SSACreate(PHI, kv.second, val);
+						elsePhiMap.erase(kv.first);
+						ssa.addSymbol(kv.first, ssa.getTail());
+					}
+					catch (std::out_of_range& oor) {
+						SSAValue* prevOccur = ssa.findSymbol(kv.first);
+						ssa.SSACreate(PHI, kv.second, prevOccur);
+						ssa.addSymbol(kv.first, ssa.getTail());
+
+					}
+				}
+				for (auto kv : elsePhiMap) {
+					SSAValue* prevOccur = ssa.findSymbol(kv.first);
+					ssa.SSACreate(PHI, prevOccur, kv.second);
+					ssa.addSymbol(kv.first, ssa.getTail());
+
+				}
+			} else {
+				// if there is no else, elseHead becomes 
+				//		the head of the join block, no branch needed
+				//		just fall through
+				ssa.updateNop(elseHead, ssa.getTailID() + 1);
+				for (auto kv : thenPhiMap) {
+					SSAValue* prevOccur = ssa.findSymbol(kv.first);
+					ssa.SSACreate(PHI, kv.second, prevOccur);
+					ssa.addSymbol(kv.first, ssa.getTail());
+
+				}
 			}
 			if (sym == FI) {
 				printItem(getTextForEnum(sym));
@@ -295,10 +343,11 @@ void Parser::ifStatement() {
 	} else {
 		error("If statement must have 'if'");
 	}
-	ssa.updateNop(joinBlockHead, ssa.getTailID() + 1);
+
 
 	elseHead = savedElseHead;
 	joinBlockHead = savedJoinBlockHead;
+	phiMap = savedPhiMap;
 	decPrintInd();
 }
 
@@ -364,6 +413,7 @@ void Parser::statement() {
 
 void Parser::statSequence() {
 	startPrintBlock("Statement Sequence");
+
 	ssa.enterScope();
 	statement();
 	while (sym == SEMICOLON) {
@@ -375,7 +425,9 @@ void Parser::statSequence() {
 
 		}
 	}
-	ssa.exitScope();
+	phiMap = ssa.exitScope();
+
+
 	decPrintInd();
 }
 

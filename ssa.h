@@ -93,20 +93,25 @@ class SSA {
 		void SSACreate(opcode operation, SSAValue* y);
         SSAValue* SSACreateConst(int constVal);
 		SSAValue* SSACreateNop();
+
 		void updateNop(SSAValue* nopInst, int nopID);
 		
 		int getTailID();
+		SSAValue* getTail();
+
 		opcode convertBr(tokenType type);
 
         // symTable function
         void enterScope();
-        void exitScope();
+        std::unordered_map<std::string, SSAValue*> exitScope();
         void addSymbol(std::string name, SSAValue* val);
         SSAValue* findSymbol(std::string name);
 
         // constTable functions
         void addConst(int constVal, SSAValue* constSSAVal);
         SSAValue* findConst(int constVal);
+
+
 
         // ssa debugging functions
         void printSSA();
@@ -127,8 +132,12 @@ class SSA {
 
         std::unordered_map<int, SSAValue*> constTable;
 
+
+
+
         
 };
+
 
 
 #endif
