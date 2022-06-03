@@ -17,9 +17,9 @@ std::string SSAValue::formatOperand(SSAValue* operand) {
 void SSAValue::instRepr() {
 	if (op == CONST) {
 		std::cout << id << ": CONST #" << constValue << std::endl;
-	} else if (op == BRA) {
+	} else if (op == BRA || op == write) {
 		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << std::endl;
-	} else if (op == NOP) {
+	} else if (op == NOP || op == read) {
 		std::cout << id << ": " << getTextForEnum(op) << std::endl;
 	} else {
 		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << formatOperand(operand2) << std::endl;
@@ -53,6 +53,14 @@ SSAValue* SSA::SSACreate(opcode operation, SSAValue* x, SSAValue* y) {
 	addSSAValue(result);
 	return result;
 
+}
+SSAValue* SSA::SSACreateWhilePhi(SSAValue* x, SSAValue* y) {
+	SSAValue* result = new SSAValue();
+	result->id = maxID++;
+	result->op = PHI;
+	result->operand1 = x;
+	result->operand2 = y;
+	return result;
 }
 
 void SSA::SSACreate(opcode operation, SSAValue* y) {
@@ -97,6 +105,10 @@ int SSA::getTailID() {
 
 SSAValue* SSA::getTail() {
 	return instTail;
+}
+
+void SSA::setInstTail(SSAValue* newTail) {
+	instTail = newTail;
 }
 
 SSA::SSA() {

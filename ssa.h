@@ -91,6 +91,7 @@ class SSA {
         void addSSAValue(SSAValue* newSSAVal);
         SSAValue* SSACreate(opcode operation, SSAValue* x, SSAValue* y);
 		void SSACreate(opcode operation, SSAValue* y);
+		SSAValue* SSACreateWhilePhi(SSAValue* x, SSAValue* y);
         SSAValue* SSACreateConst(int constVal);
 		SSAValue* SSACreateNop();
 
@@ -98,6 +99,7 @@ class SSA {
 		
 		int getTailID();
 		SSAValue* getTail();
+		void setInstTail(SSAValue* newTail);
 
 		opcode convertBr(tokenType type);
 

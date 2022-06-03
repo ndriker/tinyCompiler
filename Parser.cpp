@@ -230,7 +230,12 @@ void Parser::funcCall() {
 		next();
 		if (sym == IDENT) {
 			printItem(getTextForEnum(sym), getCurrentValue());
+			std::string ident = getCurrentValue();
+			if (ident == "InputNum") {
+				ssa.SSACreate(read, nullptr, nullptr);
+			}
 			next();
+			
 
 			if (sym == L_PAREN) {
 				// do the with paren version
@@ -240,11 +245,15 @@ void Parser::funcCall() {
 					printItem(getTextForEnum(sym));
 					next(); // consume right paren
 				} else {
-					expression();
+					SSAValue* result = expression();
+					if (ident == "OutputNum") {
+						ssa.SSACreate(write, result);
+					}
 					while (sym == COMMA) {
 						printItem(getTextForEnum(sym));
 						next(); // consume comma
 						expression();
+
 					}
 					if (sym == R_PAREN) {
 						printItem(getTextForEnum(sym));
@@ -353,14 +362,101 @@ void Parser::ifStatement() {
 
 void Parser::whileStatement() {
 	startPrintBlock("While Statement");
+
+	SSAValue* savedElseHead = elseHead;
+	SSAValue* savedJoinBlockHead = joinBlockHead;
+	std::unordered_map<std::string, SSAValue*> savedPhiMap = phiMap;
+
 	if (sym == WHILE) {
 		printItem(getTextForEnum(sym));
 		next();
-		relation();
+		SSAValue* branchInst = relation();
+
+		joinBlockHead = ssa.SSACreateNop();
+
+
+
 		if (sym == DO) {
 			printItem(getTextForEnum(sym));
 			next();
+			phiMap = std::unordered_map<std::string, SSAValue*>();
+			SSAValue* whileBodyHead = ssa.SSACreateNop();
+			ssa.updateNop(whileBodyHead, 0);
 			statSequence();
+			ssa.SSACreate(BRA, joinBlockHead);
+			SSAValue* whileBodyTail = ssa.getTail();
+
+			std::unordered_map<std::string, SSAValue*> whilePhiMap = phiMap;
+
+			ssa.updateNop(joinBlockHead, 0);
+			SSAValue* joinBlockTail = joinBlockHead;
+
+			std::unordered_map<SSAValue*, SSAValue*> idChanges;
+			for (auto kv : whilePhiMap) {
+				SSAValue* prevOccur = ssa.findSymbol(kv.first);
+				SSAValue* phiInst = ssa.SSACreate(PHI, prevOccur, kv.second);
+				idChanges.insert_or_assign(prevOccur, phiInst);
+				joinBlockTail = phiInst;
+				ssa.addSymbol(kv.first, ssa.getTail());
+			}
+			/*
+				// before
+			    aboveCmpInst
+				CMP
+				BRA
+				// after
+				aboveCmpInst
+				joinBlockHead
+				...
+				joinBlockTail
+				CMP
+				BRA
+			
+			*/
+			SSAValue* aboveCmpInst = branchInst->prev->prev;
+
+
+			SSAValue* cmpInst = branchInst->prev;
+
+			aboveCmpInst->next = joinBlockHead;
+			joinBlockHead->prev = aboveCmpInst;
+
+			joinBlockTail->next = cmpInst;
+			cmpInst->prev = joinBlockTail;
+
+			branchInst->next = whileBodyHead;
+			whileBodyHead->prev = branchInst;
+
+			ssa.setInstTail(whileBodyTail);
+
+			ssa.updateNop(elseHead, 0);
+
+			SSAValue* ssaAtIndexInBody = whileBodyHead;
+			while (ssaAtIndexInBody != whileBodyTail) {
+				try {
+					SSAValue* renameLeftInst = idChanges.at(ssaAtIndexInBody->operand1);
+					ssaAtIndexInBody->operand1 = renameLeftInst;
+
+					SSAValue* renameRightInst = idChanges.at(ssaAtIndexInBody->operand2);
+					ssaAtIndexInBody->operand2 = renameRightInst;
+				} catch (std::out_of_range& oor) {
+
+				}
+				ssaAtIndexInBody = ssaAtIndexInBody->next;
+			}
+			//aboveCmpInst->instRepr();
+			//aboveCmpInst->next->instRepr();
+			//aboveCmpInst->next->next->instRepr();
+			//aboveCmpInst->next->next->next->instRepr();
+			//aboveCmpInst->next->next->next->next->instRepr();
+			//aboveCmpInst->next->next->next->next->next->instRepr();
+			//aboveCmpInst->next->next->next->next->next->next->instRepr();
+			//aboveCmpInst->next->next->next->next->next->next->next->instRepr();
+			//aboveCmpInst->next->next->next->next->next->next->next->next->instRepr();
+			//aboveCmpInst->next->next->next->next->next->next->next->next->next->instRepr();
+
+
+
 			if (sym == OD) {
 				printItem(getTextForEnum(sym));
 				next();
@@ -373,7 +469,15 @@ void Parser::whileStatement() {
 	} else {
 		error("While statement must have 'while'");
 	}
+
+
+
+	elseHead = savedElseHead;
+	joinBlockHead = savedJoinBlockHead;
+	phiMap = savedPhiMap;
+
 	decPrintInd();
+
 }
 
 void Parser::returnStatement() {
