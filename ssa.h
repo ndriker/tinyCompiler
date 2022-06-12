@@ -44,10 +44,14 @@ class SSAValue {
         SSAValue *inCreationOrder; // store current loop head
         SSAValue *prevDomWithOpcode; // wtf is this
 
+		int bbID;
+		bool firstInstOfBB;
+
 		// ssa value debugging functions
 		std::string getTextForEnum(int enumVal);
 		std::string formatOperand(SSAValue* operand);
         void instRepr(); // print representation of each ssa value
+		std::string instCFGRepr();
 
 
 
@@ -95,7 +99,7 @@ class SSA {
         SSAValue* SSACreateConst(int constVal);
 		SSAValue* SSACreateNop();
 
-		void updateNop(SSAValue* nopInst, int nopID);
+		void updateNop(SSAValue* nopInst);
 		
 		int getTailID();
 		SSAValue* getTail();
@@ -119,6 +123,8 @@ class SSA {
         void printSSA();
 		void printSymTable();
 		void printConstTable();
+
+		void generateDotLang();
     private:
         static int maxID; // current number of SSAValues created
 		static std::unordered_map<tokenType, opcode> brOpConversions;
@@ -136,10 +142,33 @@ class SSA {
 
 
 
-
         
 };
 
+class BasicBlock {
+	public:
+		void setHead(SSAValue* head);
+		void setTail(SSAValue* tail);
+		void setBlockLabel(std::string label);
+	private:
+		std::string blockLabel;
+		SSAValue* headInst;
+		SSAValue* tailInst;
+		static int maxID;
+};
+
+
+class BBEdge {
+	public:
+		BBEdge(int from);
+		void setToBlockID(int to);
+		int getFrom();
+		int getTo();
+	private:
+		int fromBlockID;
+		int toBlockID;
+		bool edgeComplete;
+};
 
 
 #endif

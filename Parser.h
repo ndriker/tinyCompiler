@@ -38,6 +38,7 @@ class Parser {
 
 		void parse();
 		void printSSA();
+		void printDotLang();
 
 	private:
 		std::vector<Token> tokens;

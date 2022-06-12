@@ -296,7 +296,7 @@ void Parser::ifStatement() {
 			if (sym == ELSE) {
 				joinBlockHead = ssa.SSACreateNop();
 				ssa.SSACreate(BRA, joinBlockHead);
-				ssa.updateNop(elseHead, ssa.getTailID() + 1);
+				ssa.updateNop(elseHead);
 				printItem(getTextForEnum(sym));
 				next();
 
@@ -306,7 +306,7 @@ void Parser::ifStatement() {
 				
 				std::unordered_map<std::string, SSAValue*> elsePhiMap = phiMap;
 				
-				ssa.updateNop(joinBlockHead, ssa.getTailID() + 1);
+				ssa.updateNop(joinBlockHead);
 
 				for (auto kv : thenPhiMap) {
 					try {
@@ -332,7 +332,7 @@ void Parser::ifStatement() {
 				// if there is no else, elseHead becomes 
 				//		the head of the join block, no branch needed
 				//		just fall through
-				ssa.updateNop(elseHead, ssa.getTailID() + 1);
+				ssa.updateNop(elseHead);
 				for (auto kv : thenPhiMap) {
 					SSAValue* prevOccur = ssa.findSymbol(kv.first);
 					ssa.SSACreate(PHI, kv.second, prevOccur);
@@ -374,21 +374,19 @@ void Parser::whileStatement() {
 
 		joinBlockHead = ssa.SSACreateNop();
 
-
-
 		if (sym == DO) {
 			printItem(getTextForEnum(sym));
 			next();
 			phiMap = std::unordered_map<std::string, SSAValue*>();
 			SSAValue* whileBodyHead = ssa.SSACreateNop();
-			ssa.updateNop(whileBodyHead, 0);
+			ssa.updateNop(whileBodyHead);
 			statSequence();
 			ssa.SSACreate(BRA, joinBlockHead);
 			SSAValue* whileBodyTail = ssa.getTail();
 
 			std::unordered_map<std::string, SSAValue*> whilePhiMap = phiMap;
 
-			ssa.updateNop(joinBlockHead, 0);
+			ssa.updateNop(joinBlockHead);
 			SSAValue* joinBlockTail = joinBlockHead;
 
 			std::unordered_map<SSAValue*, SSAValue*> idChanges;
@@ -399,27 +397,23 @@ void Parser::whileStatement() {
 				joinBlockTail = phiInst;
 				ssa.addSymbol(kv.first, ssa.getTail());
 			}
-			/*
-				// before
-			    aboveCmpInst
-				CMP
-				BRA
-				// after
-				aboveCmpInst
-				joinBlockHead
-				...
-				joinBlockTail
-				CMP
-				BRA
-			
-			*/
+
 			SSAValue* aboveCmpInst = branchInst->prev->prev;
 
 
 			SSAValue* cmpInst = branchInst->prev;
+			try {
+				cmpInst->operand1 = idChanges.at(cmpInst->operand1);
+			} catch (std::out_of_range& oor) {
+				std::cout << "Most likely infinite loop, check that you are modifying the loop control variable." << std::endl;
+				throw std::logic_error("Most likely infinite loop, check that you are modifying the loop control variable.");
+			}
+
 
 			aboveCmpInst->next = joinBlockHead;
 			joinBlockHead->prev = aboveCmpInst;
+
+
 
 			joinBlockTail->next = cmpInst;
 			cmpInst->prev = joinBlockTail;
@@ -429,7 +423,7 @@ void Parser::whileStatement() {
 
 			ssa.setInstTail(whileBodyTail);
 
-			ssa.updateNop(elseHead, 0);
+			ssa.updateNop(elseHead);
 
 			SSAValue* ssaAtIndexInBody = whileBodyHead;
 			while (ssaAtIndexInBody != whileBodyTail) {
@@ -437,8 +431,8 @@ void Parser::whileStatement() {
 					SSAValue* renameLeftInst = idChanges.at(ssaAtIndexInBody->operand1);
 					ssaAtIndexInBody->operand1 = renameLeftInst;
 
-					SSAValue* renameRightInst = idChanges.at(ssaAtIndexInBody->operand2);
-					ssaAtIndexInBody->operand2 = renameRightInst;
+					//SSAValue* renameRightInst = idChanges.at(ssaAtIndexInBody->operand2);
+					//ssaAtIndexInBody->operand2 = renameRightInst;
 				} catch (std::out_of_range& oor) {
 
 				}
@@ -719,4 +713,9 @@ void Parser::printSSA() {
 	std::cout << std::endl;
 	ssa.printConstTable();
 	std::cout << std::endl;
+}
+
+
+void Parser::printDotLang() {
+	ssa.generateDotLang();
 }

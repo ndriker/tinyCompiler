@@ -23,5 +23,6 @@ int main(int argc, char* argv[]) {
 	parser.setTokens(lex.getTokens());
 	parser.parse();
 	parser.printSSA();
+	parser.printDotLang();
 
 }
