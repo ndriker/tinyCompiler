@@ -717,5 +717,6 @@ void Parser::printSSA() {
 
 
 void Parser::printDotLang() {
-	ssa.generateDotLang();
+	//ssa.generateDotLang();
+	ssa.gen();
 }

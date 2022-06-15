@@ -3,6 +3,7 @@
 
 #include "token.h"
 #include <unordered_map>
+#include <tuple>
 
 // create enum for opcodes
 // implement SSA Create
@@ -89,6 +90,39 @@ class SSAValue {
 
 };
 
+class BasicBlock {
+	// we want a map between branch-to inst ids and branch bbs
+	public:
+		BasicBlock(bool ft);
+		std::string bbRepr();
+		SSAValue* getHead();
+		void setHead(SSAValue* bbHead);
+		SSAValue* getTail();
+		void setTail(SSAValue* bbTail);
+		int getID();
+		void setBBID(int bbID);
+	private:
+		int id;
+		bool incomingEdgeIsFT;
+		SSAValue* head;
+		SSAValue* tail;
+
+};
+
+class BBEdge {
+public:
+	BBEdge(BasicBlock* fromBlock, BasicBlock* toBlock, std::string edgeType);
+	BasicBlock* getFrom();
+	BasicBlock* getTo();
+	std::string getType();
+	std::string bbEdgeRepr();
+private:
+	BasicBlock* from;
+	BasicBlock* to;
+	std::string type;
+};
+
+
 class SSA {
     public:
         SSA();
@@ -124,7 +158,10 @@ class SSA {
 		void printSymTable();
 		void printConstTable();
 
-		void generateDotLang();
+		std::string genBBStart(int bbID);
+		std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> genBasicBlocks();
+		void gen();
+		//void generateDotLang();
     private:
         static int maxID; // current number of SSAValues created
 		static std::unordered_map<tokenType, opcode> brOpConversions;
@@ -145,30 +182,11 @@ class SSA {
         
 };
 
-class BasicBlock {
-	public:
-		void setHead(SSAValue* head);
-		void setTail(SSAValue* tail);
-		void setBlockLabel(std::string label);
-	private:
-		std::string blockLabel;
-		SSAValue* headInst;
-		SSAValue* tailInst;
-		static int maxID;
-};
 
 
-class BBEdge {
-	public:
-		BBEdge(int from);
-		void setToBlockID(int to);
-		int getFrom();
-		int getTo();
-	private:
-		int fromBlockID;
-		int toBlockID;
-		bool edgeComplete;
-};
+
+
+
 
 
 #endif

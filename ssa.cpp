@@ -239,186 +239,382 @@ void SSA::printConstTable() {
 	}
 }
 
+std::string SSA::genBBStart(int bbID) {
+	std::string bbIDStr = std::to_string(bbID);
+	std::string currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
+	return currentBB;
+}
 
-void SSA::generateDotLang() {
-	
-	std::unordered_map<int, BBEdge*> branchEdgeMap;
-	std::unordered_map<int, BBEdge*> fallThroughEdgeMap;
+std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> SSA::genBasicBlocks() {
+	/*
+		if a branch instruction is found
+			close current bb (include branch inst in current bb)
+			create new bb
+			store branch-to id for new block
+		else
+		    if id was previously a branch-to id
+			    close current bb
+				create new bb
+			else
+			    just add inst to bb
+	*/
 
-	
-	SSAValue* current = instList;
-	SSAValue* prevCurrent = nullptr;
-	std::vector<int> newBlockIDs;
-	std::vector<std::string> bbStrings;
-	std::string currentBB = "";
+	SSAValue* current = instList; 
+	SSAValue* prevCurrent = current;
+	std::unordered_map<int, BasicBlock*> branchToBlocks; // inst ids for when to create new bb
+	std::vector<BasicBlock*> basicBlocks;
+	std::vector<BBEdge*> bbEdges;
+
+	BasicBlock* currentBB = nullptr;
 	int bbID = 1;
 
-	bool isBlockNew = false;
 
 	while (current != nullptr) {
-		if (currentBB == "") {
-			currentBB = "bb1 [shape=record, label=\" < b > BB1 | {";
+		if (currentBB == nullptr) {
+			currentBB = new BasicBlock(true);
+			currentBB->setBBID(1);
+			currentBB->setHead(current);
+			currentBB->setTail(current);
 		}
-
-
-
 		if (current->op <= 17 && current->op >= 11) {
-			// branch inst
+			// any branch inst
 			// close current block, create new block, and store branch-to id for new block later
-			BBEdge* newBranchEdge = new BBEdge(bbID);
-			BBEdge* newFTEdge = new BBEdge(bbID);
-			currentBB = currentBB + current->instCFGRepr() + "}\"];";
-
-			fallThroughEdgeMap.insert({ current->id + 1, newFTEdge });
-			current->bbID = bbID;
-
-			bbStrings.push_back(currentBB);
+			currentBB->setTail(current);
 			bbID += 1;
-			std::string bbIDStr = std::to_string(bbID);
-			currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
-			isBlockNew = true;
+			basicBlocks.push_back(currentBB);
+
+
+
+
+
+			currentBB = new BasicBlock(true);
+			currentBB->setHead(current->next);
+			currentBB->setTail(current);
+			currentBB->setBBID(bbID);
+
+			BBEdge* newEdge = new BBEdge(basicBlocks.back(), currentBB, "ft");
+			bbEdges.push_back(newEdge);
+
+			
+
+
+
+			// at this point, currentBB is FT block (edge to it from split block must be ft edge)
+
 			int newBlockID;
-			if (current->op == 11) {
+			if (current->op == BRA) {
 				// bra inst
 				newBlockID = current->operand1->id;
 
 			} else {
 				// all other branch insts (12 <= op <= 17)
 				newBlockID = current->operand2->id;
+
 			}
-			
-			branchEdgeMap.insert({ newBlockID, newBranchEdge });
-			newBlockIDs.push_back(newBlockID);
+			// before creating branch block, first check that the inst does not exist above
+			bool found = false;
+			BasicBlock* jumpToBlock = nullptr;
+			for (BasicBlock* bb : basicBlocks) {
+				SSAValue* bbHead = bb->getHead();
+				SSAValue* bbTail = bb->getTail();
+				while (bbHead != bbTail->next) {
+					if (bbHead->id == newBlockID) {
+						found = true;
+						jumpToBlock = bb;
+						break;
+					}
+
+					bbHead = bbHead->next;
+				}
+			}
+			std::cout << "FOUND is " << found << std::endl;
+			if (!found) {
+				BasicBlock* branchBlock = new BasicBlock(false);
+				branchToBlocks.insert({ newBlockID, branchBlock });
+				BBEdge* newEdge = new BBEdge(basicBlocks.back(), branchBlock, "br");
+				bbEdges.push_back(newEdge);
+			} else {
+				BBEdge* newEdge = new BBEdge(basicBlocks.back(), jumpToBlock, "br");
+				bbEdges.push_back(newEdge);
+
+			}
 
 		} else {
 			bool mustCreateNewBlock = false;
-			for (int id : newBlockIDs) {
-				if (current->id == id) {
-					mustCreateNewBlock = true;
+			// check if current inst id needs to be start of new bb
+			BasicBlock* branchToBlock = nullptr;
+			for (auto kv : branchToBlocks) {
+				if (current->id == kv.first) {
+					branchToBlock = kv.second;
 					break;
 				}
 			}
-			if (mustCreateNewBlock) {
-				if (!isBlockNew) {
-					currentBB.pop_back();
-					currentBB = currentBB + "}\"];";
-					bbStrings.push_back(currentBB);
-					bbID += 1;
-					std::string bbIDStr = std::to_string(bbID);
-					currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
-
-				}
-				currentBB = currentBB + current->instCFGRepr() + "|";
-				current->bbID = bbID;
-				isBlockNew = false;
+			if (branchToBlock != nullptr) {
+				basicBlocks.push_back(currentBB);
+				bbID += 1;
+				currentBB = branchToBlock;
+				currentBB->setBBID(bbID);
+				currentBB->setHead(current);
+				currentBB->setTail(current);
+				// at this point, new block is a branch-to block, must have edge type of branch
 			} else {
 				// just add instruction to current block
-				currentBB = currentBB + current->instCFGRepr() + "|";
-				current->bbID = bbID;
-
-				isBlockNew = false;
+				if (currentBB->getHead() == nullptr) {
+					currentBB->setHead(current);
+				}
+				currentBB->setTail(current);
 			}
-
 		}
 		prevCurrent = current;
 		current = current->next;
-
 	}
-	currentBB.pop_back();
-	currentBB = currentBB + "}\"];";
-	bbStrings.push_back(currentBB);
+	currentBB->setTail(prevCurrent); // questionable
+	basicBlocks.push_back(currentBB);
 
-	current = instList;
-	while (current != nullptr) {
+	return std::make_tuple(basicBlocks, bbEdges);
+	//std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> info;
+	//info->basicBlocks = basicBlocks;
+	//info->bbEdges = bbEdges;
+	//return info;
+}
 
-		try {
-			BBEdge* bEdge = branchEdgeMap.at(current->id);
-			bEdge->setToBlockID(current->bbID);
-		} catch (std::out_of_range& oor) {
-			// intentionally left blank
-		}
+void SSA::gen() {
+	std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> info = genBasicBlocks();
+	std::vector<BasicBlock*> basicBlocks = std::get<0>(info);
+	std::vector<BBEdge*> bbEdges = std::get<1>(info);
+	std::cout << "digraph prog {" << std::endl;
 
-		try {
-			BBEdge* fEdge = fallThroughEdgeMap.at(current->id);
-			fEdge->setToBlockID(current->bbID);
-
-		} catch (std::out_of_range& oor) {
-			 //intentionally left blank
-		}
-		current = current->next;
+	for (BasicBlock* bb: basicBlocks) {
+		std::cout << bb->bbRepr() << std::endl;
 	}
 
-
-
-	std::cout << "digraph G {" << std::endl;
-	for (std::string s : bbStrings) {
-		std::cout << s << std::endl;
+	for (BBEdge* edge : bbEdges) {
+		std::cout << edge->bbEdgeRepr() << std::endl;
 	}
-
-
-
-	std::unordered_map<int, int> visited;
-	for (auto kv : branchEdgeMap) {
-		BBEdge* edge = kv.second;
-		std::cout << "bb" << edge->getFrom() << ":s -> bb" << edge->getTo() << ":n;" << std::endl;
-		visited.insert({ edge->getFrom(), edge->getTo() });
-	}
-	for (auto kv : fallThroughEdgeMap) {
-		BBEdge* edge = kv.second;
-		try {
-			int to = visited.at(edge->getFrom());
-			if (to != edge->getTo()) {
-				std::cout << "bb" << edge->getFrom() << ":s -> bb" << edge->getTo() << ":n;" << std::endl;
-
-			}
-		} catch (std::out_of_range& oor) {
-			std::cout << "bb" << edge->getFrom() << ":s -> bb" << edge->getTo() << ":n;" << std::endl;
-
-		}
-	}
-
 
 	std::cout << "}" << std::endl;
-	for (auto kv : branchEdgeMap) {
-		BBEdge* edge = kv.second;
-		std::cout << kv.first << " " << edge->getFrom() << " " << edge->getTo() << std::endl;
-	}
 }
+
+//void SSA::generateDotLang() {
+//	
+//	std::unordered_map<int, BBEdge*> branchEdgeMap;
+//	std::unordered_map<int, BBEdge*> fallThroughEdgeMap;
+//
+//	
+//	SSAValue* current = instList;
+//	SSAValue* prevCurrent = nullptr;
+//	std::vector<int> newBlockIDs;
+//	std::vector<std::string> bbStrings;
+//	std::string currentBB = "";
+//	int bbID = 1;
+//
+//	bool isBlockNew = false;
+//
+//	while (current != nullptr) {
+//		if (currentBB == "") {
+//			currentBB = "bb1 [shape=record, label=\" < b > BB1 | {";
+//		}
+//
+//
+//
+//
+//		if (current->op <= 17 && current->op >= 11) {
+//			// branch inst
+//			// close current block, create new block, and store branch-to id for new block later
+//			BBEdge* newBranchEdge = new BBEdge(bbID);
+//			BBEdge* newFTEdge = new BBEdge(bbID);
+//			currentBB = currentBB + current->instCFGRepr() + "}\"];";
+//
+//			fallThroughEdgeMap.insert({ current->id + 1, newFTEdge });
+//			current->bbID = bbID;
+//
+//			bbStrings.push_back(currentBB);
+//			bbID += 1;
+//			std::string bbIDStr = std::to_string(bbID);
+//			currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
+//			isBlockNew = true;
+//			int newBlockID;
+//			if (current->op == 11) {
+//				// bra inst
+//				newBlockID = current->operand1->id;
+//
+//			} else {
+//				// all other branch insts (12 <= op <= 17)
+//				newBlockID = current->operand2->id;
+//			}
+//			
+//			branchEdgeMap.insert({ newBlockID, newBranchEdge });
+//			newBlockIDs.push_back(newBlockID);
+//
+//		} else {
+//			bool mustCreateNewBlock = false;
+//			for (int id : newBlockIDs) {
+//				if (current->id == id) {
+//					mustCreateNewBlock = true;
+//					break;
+//				}
+//			}
+//			if (mustCreateNewBlock) {
+//				if (!isBlockNew) {
+//					currentBB.pop_back();
+//					currentBB = currentBB + "}\"];";
+//					bbStrings.push_back(currentBB);
+//					bbID += 1;
+//					std::string bbIDStr = std::to_string(bbID);
+//					currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
+//
+//				}
+//				currentBB = currentBB + current->instCFGRepr() + "|";
+//				current->bbID = bbID;
+//				isBlockNew = false;
+//			} else {
+//				// just add instruction to current block
+//				currentBB = currentBB + current->instCFGRepr() + "|";
+//				current->bbID = bbID;
+//
+//				isBlockNew = false;
+//			}
+//
+//		}
+//		prevCurrent = current;
+//		current = current->next;
+//
+//	}
+//	currentBB.pop_back();
+//	currentBB = currentBB + "}\"];";
+//	bbStrings.push_back(currentBB);
+//
+//	current = instList;
+//	while (current != nullptr) {
+//
+//		try {
+//			BBEdge* bEdge = branchEdgeMap.at(current->id);
+//			bEdge->setToBlockID(current->bbID);
+//		} catch (std::out_of_range& oor) {
+//			// intentionally left blank
+//		}
+//
+//		try {
+//			BBEdge* fEdge = fallThroughEdgeMap.at(current->id);
+//			fEdge->setToBlockID(current->bbID);
+//
+//		} catch (std::out_of_range& oor) {
+//			 //intentionally left blank
+//		}
+//		current = current->next;
+//	}
+//
+//
+//
+//	std::cout << "digraph G {" << std::endl;
+//	for (std::string s : bbStrings) {
+//		std::cout << s << std::endl;
+//	}
+//
+//
+//
+//	std::unordered_map<int, int> visited;
+//	for (auto kv : branchEdgeMap) {
+//		BBEdge* edge = kv.second;
+//		std::cout << "bb" << edge->getFrom() << ":s -> bb" << edge->getTo() << ":n;" << std::endl;
+//		visited.insert({ edge->getFrom(), edge->getTo() });
+//	}
+//	for (auto kv : fallThroughEdgeMap) {
+//		BBEdge* edge = kv.second;
+//		try {
+//			int to = visited.at(edge->getFrom());
+//			if (to != edge->getTo()) {
+//				std::cout << "bb" << edge->getFrom() << ":s -> bb" << edge->getTo() << ":n;" << std::endl;
+//
+//			}
+//		} catch (std::out_of_range& oor) {
+//			std::cout << "bb" << edge->getFrom() << ":s -> bb" << edge->getTo() << ":n;" << std::endl;
+//
+//		}
+//	}
+//
+//
+//	std::cout << "}" << std::endl;
+//	for (auto kv : branchEdgeMap) {
+//		BBEdge* edge = kv.second;
+//		std::cout << kv.first << " " << edge->getFrom() << " " << edge->getTo() << std::endl;
+//	}
+//}
 
 
 // BasicBlock
-int BasicBlock::maxID = 0;
 
-
-void BasicBlock::setHead(SSAValue* head) {
-	headInst = head;
+BasicBlock::BasicBlock(bool ft) {
+	head = nullptr;
+	tail = nullptr;
+	id = 0;
+	incomingEdgeIsFT = ft;
 }
 
-void BasicBlock::setTail(SSAValue* tail) {
-	tailInst = tail;
+SSAValue* BasicBlock::getHead() {
+	return head;
 }
 
-void BasicBlock::setBlockLabel(std::string label) {
-	blockLabel = label;
+void BasicBlock::setHead(SSAValue* bbHead) {
+	head = bbHead;
 }
+
+SSAValue* BasicBlock::getTail() {
+	return tail;
+}
+
+void BasicBlock::setTail(SSAValue* bbTail) {
+	tail = bbTail;
+}
+
+int BasicBlock::getID() {
+	return id;
+}
+
+void BasicBlock::setBBID(int bbID) {
+	id = bbID;
+}
+
+std::string BasicBlock::bbRepr() {
+	SSAValue* current = head;
+	SSAValue* stopAt = tail->next;
+	std::string bbIDStr = std::to_string(id);
+	std::string bbString = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
+	while (current != stopAt) {
+		bbString = bbString + current->instCFGRepr() + "|";
+		current = current->next;
+	}
+	bbString.pop_back();
+	bbString = bbString + "}\"];";
+	return bbString;
+}
+
 
 // BBEdge
-BBEdge::BBEdge(int from) {
-	fromBlockID = from;
-	toBlockID = -1;
-	edgeComplete = false;
-
+BBEdge::BBEdge(BasicBlock* fromBlock, BasicBlock* toBlock, std::string edgeType) {
+	from = fromBlock;
+	to = toBlock;
+	type = edgeType;
 }
 
-void BBEdge::setToBlockID(int to) {
-	toBlockID = to;
-	edgeComplete = true;
+BasicBlock* BBEdge::getFrom() {
+	return from;
+}
+BasicBlock* BBEdge::getTo() {
+	return to;
+}
+std::string BBEdge::getType() {
+	return type;
 }
 
-int BBEdge::getFrom() {
-	return fromBlockID;
-}
+std::string BBEdge::bbEdgeRepr() {
+	int fromID = from->getID();
+	int toID = to->getID();
 
-int BBEdge::getTo() {
-	return toBlockID;
+	std::string fromIDStr = std::to_string(fromID);
+	std::string toIDStr = std::to_string(toID);
+
+
+	std::string out = "bb" + fromIDStr + ":s -> bb" + toIDStr + ":n [label=\"" + type + "\"];";
+	return out;
 }

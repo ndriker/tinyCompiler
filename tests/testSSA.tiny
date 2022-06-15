@@ -1,17 +1,27 @@
+/*main
+    var a, b;
+{
+    let a <- 1;
+	let b <- 5;
+	if a < b then
+		let a <- b;
+	fi;
+
+}
+*/
+
 main
     var a;
 {
     let a <- 1;
     let b <- 5;
-    while a < 10 do
-        let a <- a + 1;
-        if a < b then
-           let b <- b - 1;
-        fi;
-od;
+	while a < b do
+	   let a <- 3;
+	od;
+	let b <- 2;
 
 }.
-/*
+*/
 main
 var a, b, c;
 {
