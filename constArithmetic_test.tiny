@@ -1,0 +1,8 @@
+main
+    var a, b, c, d; 
+{
+    let a <- 1 + 1;
+    let b <- 1 - 1;
+    let c <- 1 * 1;
+    let d <- 1 / 1;
+}.

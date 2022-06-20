@@ -1,0 +1,5 @@
+0: CONST #1
+1: ADDOP(0)(0)
+2: SUBOP(0)(0)
+3: MULOP(0)(0)
+4: DIVOP(0)(0)

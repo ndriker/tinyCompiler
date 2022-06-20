@@ -1,0 +1,15 @@
+main 
+    var a, b, c;
+{
+    let a <- 1 + 2;
+    let b <- a + 1;
+    let c <- 2;
+
+    if a < b then
+        let b <- 1 + 2;
+        if a == b then
+            let c <- a + 1;
+        fi;
+    fi;
+
+}.

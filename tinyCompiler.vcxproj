@@ -151,6 +151,41 @@
     <ClInclude Include="token.h" />
     <ClInclude Include="lexer.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="add_expected.txt" />
+    <Text Include="assignConst_expected.txt" />
+    <Text Include="assignVarToVar_expected.txt" />
+    <Text Include="constArithmetic_expected.txt" />
+    <Text Include="constArithmetic_test.tiny" />
+    <Text Include="cseIfThen_expected.txt" />
+    <Text Include="cseNestedIfThenElse_expected.txt" />
+    <Text Include="cseNestedIfThen_expected.txt" />
+    <Text Include="cseSimple_expected.txt" />
+    <Text Include="ifelse_expected.txt" />
+    <Text Include="ifthen_expected.txt" />
+    <Text Include="index.txt" />
+    <Text Include="nestedIfThenElse_expected.txt" />
+    <Text Include="nestedIfThen_expected.txt" />
+    <Text Include="sub_expected.txt" />
+    <Text Include="varArithmetic_expected.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="add_test.tiny" />
+    <None Include="assignConst_test.tiny" />
+    <None Include="assignVarToVar_test.tiny" />
+    <None Include="cseIfThenElse_expected.txt" />
+    <None Include="cseIfThenElse_test.tiny" />
+    <None Include="cseIfThen_test.tiny" />
+    <None Include="cseNestedIfThenElse_test.tiny" />
+    <None Include="cseNestedIfThen_test.tiny" />
+    <None Include="cseSimple_test.tiny" />
+    <None Include="ifelse_test.tiny" />
+    <None Include="ifthen_test.tiny" />
+    <None Include="nestedIfThenElse_test.tiny" />
+    <None Include="nestedIfThen_test.tiny" />
+    <None Include="sub_test.tiny" />
+    <None Include="varArithmetic_test.tiny" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

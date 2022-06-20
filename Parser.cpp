@@ -24,6 +24,11 @@ void Parser::setTokens(std::vector<Token> inTokens) {
 
 }
 
+void Parser::setDebug(bool debugMode) {
+	debug = debugMode;
+}
+
+
 void Parser::next() {
 	if (currPos < tokens.size() - 1) {
 		currPos += 1;
@@ -54,14 +59,18 @@ void Parser::decPrintInd() {
 }
 
 void Parser::printItem(std::string item, std::string value) {
-	incPrintInd();
-	std::cout << createIndent() << item << " " << value << std::endl;
-	decPrintInd();
+	if (debug) {
+		incPrintInd();
+		std::cout << createIndent() << item << " " << value << std::endl;
+		decPrintInd();
+	}
 }
 
 void Parser::startPrintBlock(std::string blockName) {
-	incPrintInd();
-	std::cout << createIndent() << blockName << std::endl;
+	if (debug) {
+		incPrintInd();
+		std::cout << createIndent() << blockName << std::endl;
+	}
 }
 
 SSAValue* Parser::varRef() {
@@ -70,6 +79,7 @@ SSAValue* Parser::varRef() {
 	std::string ident = getCurrentValue();
 	printItem("Identifier", ident);
 	SSAValue* identInst = ssa.findSymbol(ident);
+	identInst->setNameType(ident, true);
 
 	next(); // consume ident
 	decPrintInd();
@@ -89,6 +99,7 @@ SSAValue* Parser::factor() {
 		printItem("Number", numStr);
 		int num = stoi(numStr);
 		left = ssa.SSACreateConst(num);
+		left->setNameType("#" + numStr, false);
 		next();
 	}
 	else if (sym == L_PAREN) {
@@ -207,6 +218,9 @@ void Parser::assignment() {
 				next(); // consume ASSIGN
 				left = expression();
 				ssa.addSymbol(identName, left);
+				if (left->op != CONST) {
+					left->setNameType(identName, true);
+				}
 
 			} else {
 				error("Arrow Error");
@@ -438,16 +452,7 @@ void Parser::whileStatement() {
 				}
 				ssaAtIndexInBody = ssaAtIndexInBody->next;
 			}
-			//aboveCmpInst->instRepr();
-			//aboveCmpInst->next->instRepr();
-			//aboveCmpInst->next->next->instRepr();
-			//aboveCmpInst->next->next->next->instRepr();
-			//aboveCmpInst->next->next->next->next->instRepr();
-			//aboveCmpInst->next->next->next->next->next->instRepr();
-			//aboveCmpInst->next->next->next->next->next->next->instRepr();
-			//aboveCmpInst->next->next->next->next->next->next->next->instRepr();
-			//aboveCmpInst->next->next->next->next->next->next->next->next->instRepr();
-			//aboveCmpInst->next->next->next->next->next->next->next->next->next->instRepr();
+
 
 
 
@@ -659,7 +664,9 @@ void Parser::funcBody() {
 }
 
 void Parser::computation() {
-	std::cout << "Computation" << std::endl;
+	if (debug) {
+		std::cout << "Computation" << std::endl;
+	}
 	if (sym == MAIN) {
 		printItem(getTextForEnum(sym));
 		next();
@@ -697,7 +704,9 @@ void Parser::computation() {
 
 
 void Parser::parse() {
-	std::cout << "Parser is starting..." << std::endl;
+	if (debug) {
+		std::cout << "Parser is starting..." << std::endl;
+	}
 	currentPrintIndent = 0;
 	currPos = 0;
 	sym = tokens[currPos].getType();
@@ -705,6 +714,13 @@ void Parser::parse() {
 	computation();
 }
 
+std::string Parser::outputSSA() {
+	return ssa.outputSSA();
+}
+
+void Parser::reset() {
+	ssa.reset();
+}
 void Parser::printSSA() {
 	std::cout << std::endl;
 	ssa.printSSA();

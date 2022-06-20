@@ -1,0 +1,21 @@
+main
+    var a, b;
+{
+    let a <- 1;
+    let b <- 2;
+    if a < b then
+        let a <- a + 1;
+        if a == b then
+            let b <- b + 1;
+        else
+            let b <- a - 1;
+        fi;
+    else
+        let b <- b + 1;
+        if a != b then
+            let a <- b + 1;
+        else
+            let b <- b + a;
+        fi;
+    fi;
+}.

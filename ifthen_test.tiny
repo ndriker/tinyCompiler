@@ -1,0 +1,8 @@
+main
+    var a; 
+{
+    let a <- 1;
+    if a == 1 then
+        let a <- 0;
+    fi;
+}.

@@ -42,16 +42,28 @@ class SSAValue {
         int id;
         SSAValue *operand1, *operand2;
         SSAValue *prev, *next;
-        SSAValue *inCreationOrder; // store current loop head
+        SSAValue *inCreationOrder; 
         SSAValue *prevDomWithOpcode; // wtf is this
+
+		std::string name;
+		bool isVar;
 
 		int bbID;
 		bool firstInstOfBB;
 
+
+		void setNameType(std::string ssaName, bool ssaType);
+
 		// ssa value debugging functions
 		std::string getTextForEnum(int enumVal);
 		std::string formatOperand(SSAValue* operand);
+
+		std::string getType();
+		std::string getNameType();
+
+
         void instRepr(); // print representation of each ssa value
+		void instReprWNames();
 		std::string instCFGRepr();
 
 
@@ -151,9 +163,12 @@ class SSA {
         void addConst(int constVal, SSAValue* constSSAVal);
         SSAValue* findConst(int constVal);
 
-
+		// inorder functions
+		void addInOrder(SSAValue* newInst);
+		SSAValue* findPrevDomWithOpcode(opcode operation);
 
         // ssa debugging functions
+		std::string outputSSA();
         void printSSA();
 		void printSymTable();
 		void printConstTable();
@@ -162,6 +177,8 @@ class SSA {
 		std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> genBasicBlocks();
 		void gen();
 		//void generateDotLang();
+
+		void reset();
     private:
         static int maxID; // current number of SSAValues created
 		static std::unordered_map<tokenType, opcode> brOpConversions;
@@ -174,6 +191,8 @@ class SSA {
 
         std::vector<std::unordered_map<std::string, SSAValue*>> symTable;
 		std::vector<std::unordered_map<std::string, SSAValue*>> symTableCopy;
+
+		std::vector<std::vector<SSAValue*>> inOrder;
 
         std::unordered_map<int, SSAValue*> constTable;
 

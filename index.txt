@@ -1,0 +1,15 @@
+assignConst : Testing Assignment Statement with Const
+assignVarToVar : Testing Assigning Variable to Variable
+add : Testing AddOp
+sub : Testing SubOp
+ifthen : Testing Conditional with No Else Clause
+ifelse : Testing Conditional with Both Then and Else Clauses
+constArithmetic : Testing All Arithmetic Operations on Constants
+varArithmetic : Testing All Arithmetic Operations on Variables
+nestedIfThen : Testing Nested If-Then (no else clauses)
+nestedIfThenElse : Testing Nested If-Then-Else
+cseSimple : Testing Simple Linear CSE
+cseIfThen : Testing CSE within If-Then (no else clause)
+cseIfThenElse : Testing CSE within If-Then-Else
+cseNestedIfThen : Testing CSE within nested If-Then (no else clauses)
+cseNestedIfThenElse : Testing CSE within nested If-Then-Else

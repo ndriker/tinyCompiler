@@ -1,0 +1,11 @@
+0: CONST #1
+1: CONST #2
+2: ADDOP(0)(1)
+3: ADDOP(2)(0)
+4: CMP(2)(3)
+5: BGE(4)(7)
+6: BRA(8)
+7: NOP
+8: NOP
+9: PHI(2)(3)
+10: PHI(1)(2)

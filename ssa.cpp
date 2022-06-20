@@ -15,6 +15,7 @@ std::string SSAValue::formatOperand(SSAValue* operand) {
 	return "(" + std::to_string(operand->id) + ")";
 }
 void SSAValue::instRepr() {
+
 	if (op == CONST) {
 		std::cout << id << ": CONST #" << constValue << std::endl;
 	} else if (op == BRA || op == write) {
@@ -24,7 +25,40 @@ void SSAValue::instRepr() {
 	} else {
 		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << formatOperand(operand2) << std::endl;
 	}
+}
 
+std::string SSAValue::getType() {
+	std::string type;
+	if (isVar) {
+		type = "VAR";
+	} else {
+		type = "CONST";
+	}
+	return type;
+}
+
+std::string SSAValue::getNameType() {
+	std::string info = "; " + getType() + " " + name;
+	if (operand1 != nullptr) {
+		info += ", lArg: " + operand1->getType() + " " + operand1->name;
+	}
+	if (operand2 != nullptr) {
+		info += ", rArg: " + operand2->getType() + " " + operand2->name;
+	}
+	return info;
+}
+
+void SSAValue::instReprWNames() {
+
+	if (op == CONST) {
+		std::cout << id << ": CONST #" << constValue << getNameType() << std::endl;
+	} else if (op == BRA || op == write) {
+		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << getNameType() << std::endl;
+	} else if (op == NOP || op == read) {
+		std::cout << id << ": " << getTextForEnum(op) << getNameType() << std::endl;
+	} else {
+		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << formatOperand(operand2) << getNameType() << std::endl;
+	}
 }
 
 std::string SSAValue::instCFGRepr() {
@@ -40,6 +74,11 @@ std::string SSAValue::instCFGRepr() {
 		
 	}
 	return output;
+}
+
+void SSAValue::setNameType(std::string ssaName, bool ssaType) {
+	name = ssaName;
+	isVar = ssaType;
 }
 
 // ssa class
@@ -59,12 +98,33 @@ opcode SSA::convertBr(tokenType type) {
 }
 
 SSAValue* SSA::SSACreate(opcode operation, SSAValue* x, SSAValue* y) {
+	SSAValue* prevDomWithOpcode = nullptr;
+	if (operation >= ADDOP && operation <= DIVOP) {
+		// these ops can be involved in CSE
+		// search in symbol table for dominating inst with same opcode
+		// then search up the linked list looking for an inst that has same params
+		prevDomWithOpcode = findPrevDomWithOpcode(operation);
+
+		SSAValue* iter = prevDomWithOpcode;
+		while (iter != nullptr) {
+			//std::cout << "SSACreate prevDomWithOpcode" << iter->instCFGRepr() << std::endl;
+			if (iter->operand1 == x && iter->operand2 == y) {
+
+				// found common subexpression
+				return iter;
+			}
+			iter = iter->prevDomWithOpcode;
+		}
+
+	}
 	SSAValue* result = new SSAValue();
 	result->id = maxID++;
 	result->op = operation;
 	result->operand1 = x;
 	result->operand2 = y;
+	result->prevDomWithOpcode = prevDomWithOpcode;
 	addSSAValue(result);
+	addInOrder(result);
 	return result;
 
 }
@@ -74,6 +134,7 @@ SSAValue* SSA::SSACreateWhilePhi(SSAValue* x, SSAValue* y) {
 	result->op = PHI;
 	result->operand1 = x;
 	result->operand2 = y;
+	addInOrder(result);
 	return result;
 }
 
@@ -82,6 +143,7 @@ void SSA::SSACreate(opcode operation, SSAValue* y) {
 	result->id = maxID++;
 	result->op = operation;
 	result->operand1 = y;
+	addInOrder(result);
 	addSSAValue(result);
 }
 
@@ -93,6 +155,7 @@ SSAValue* SSA::SSACreateConst(int constVal) {
 		ssaConst->op = CONST;
 		ssaConst->id = maxID++;
 		ssaConst->constValue = constVal;
+		addInOrder(ssaConst);
 		addConst(constVal, ssaConst);
 		addSSAValue(ssaConst);
 		return ssaConst;
@@ -111,6 +174,27 @@ void SSA::updateNop(SSAValue* nopInst) {
 	//std::cout << "In update nop" << std::endl;
 	nopInst->id = maxID++;
 	addSSAValue(nopInst);
+	addInOrder(nopInst);
+
+}	
+
+void SSA::addInOrder(SSAValue* newInst) {
+	inOrder.back().push_back(newInst);
+}
+
+SSAValue* SSA::findPrevDomWithOpcode(opcode operation) {
+	for (int i = inOrder.size() - 1; i >= 0; i--) {
+
+		std::vector<SSAValue*> inner = inOrder.at(i);
+		//std::cout << operation << std::endl;
+		for (int j = inner.size() - 1; j >= 0; j--) {
+			SSAValue* item = inner.at(j);
+			if (item->op == operation) {
+				return item;
+			}
+		}
+	}
+	return nullptr;
 }
 
 int SSA::getTailID() {
@@ -153,12 +237,15 @@ void SSA::enterScope() {
 	symTable.push_back(std::unordered_map<std::string, SSAValue*>());
 	symTableCopy.push_back(std::unordered_map<std::string, SSAValue*>());
 
+	inOrder.push_back(std::vector<SSAValue*>());
+
 	scopeDepth = scopeDepth + 1;
 }
 
 std::unordered_map<std::string, SSAValue*> SSA::exitScope() {
 	std::unordered_map<std::string, SSAValue*> lastScope = symTable.back();
 	symTable.pop_back();
+	inOrder.pop_back();
 	//for (auto kv : lastScope) {
 	//	SSAValue* prevOccur = findSymbol(kv.first);	
 	//	phiMap.insert({ prevOccur, kv.second });
@@ -211,13 +298,22 @@ SSAValue* SSA::findConst(int constVal) {
 }
 
 // ssa debugging functions
-
+std::string SSA::outputSSA() {
+	std::string output = "";
+	SSAValue* current = instList;
+	while (current != nullptr) {
+		output += current->instCFGRepr() + "\n";
+		current = current->next;
+	}
+	return output;
+}
 
 
 void SSA::printSSA() {
 	SSAValue* current = instList;
 	while (current != nullptr) {
-		current->instRepr();
+		//current->instRepr();
+		current->instReprWNames();
 		current = current->next;
 	}
 }
@@ -617,4 +713,20 @@ std::string BBEdge::bbEdgeRepr() {
 
 	std::string out = "bb" + fromIDStr + ":s -> bb" + toIDStr + ":n [label=\"" + type + "\"];";
 	return out;
+}
+
+void SSA::reset() {
+	maxID = 0;
+	instList = nullptr;
+	instTail = nullptr;
+	instListLength = 0;
+
+	scopeDepth = 0;
+
+	symTable = std::vector<std::unordered_map<std::string, SSAValue*>>();
+	symTableCopy = std::vector<std::unordered_map<std::string, SSAValue*>>();
+
+	inOrder = std::vector<std::vector<SSAValue*>>();
+
+	constTable = std::unordered_map<int, SSAValue*>();
 }

@@ -1,0 +1,12 @@
+main
+    var a, b; 
+{
+    let a <- 100;
+    let b <- 10;
+    if b != a then
+        let b <- b * 10;
+        if b == a then
+            let b <- b + 320;
+        fi;
+    fi;
+}.

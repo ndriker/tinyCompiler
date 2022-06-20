@@ -73,7 +73,7 @@ std::vector<Token> Lexer::getTokens() {
 
 
 void Lexer::tokenize() {
-	std::cout << "Lexer is starting..." << std::endl;
+	//std::cout << "Lexer is starting..." << std::endl;
 	if (infile.is_open()) {
 		std::string line;
 		int lineNumber = 0;

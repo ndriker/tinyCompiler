@@ -45,4 +45,101 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="index.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="add_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="sub_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="ifelse_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="varArithmetic_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="ifthen_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="constArithmetic_test.tiny">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="constArithmetic_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="assignConst_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="assignVarToVar_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="cseSimple_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="nestedIfThen_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="nestedIfThenElse_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="cseIfThen_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="cseNestedIfThen_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="cseNestedIfThenElse_expected.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="add_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="sub_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="ifelse_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="varArithmetic_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="ifthen_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="assignConst_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="assignVarToVar_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="cseSimple_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="nestedIfThen_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="nestedIfThenElse_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="cseIfThen_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="cseIfThenElse_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="cseIfThenElse_expected.txt">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="cseNestedIfThen_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="cseNestedIfThenElse_test.tiny">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
 </Project>

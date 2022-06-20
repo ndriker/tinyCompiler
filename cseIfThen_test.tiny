@@ -1,0 +1,9 @@
+main
+    var a, b;
+{
+    let a <- 1 + 2;
+    let b <- a + 1;
+    if a < b then
+        let b <- 1 + 2;
+    fi;
+}.

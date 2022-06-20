@@ -13,7 +13,7 @@ class Parser {
 	//SSAValue 
 
 		void setTokens(std::vector<Token> inTokens);
-
+		void setDebug(bool debugMode);
 
 		SSAValue* varRef();
 		SSAValue* factor();
@@ -37,10 +37,14 @@ class Parser {
 		void computation();
 
 		void parse();
+		std::string outputSSA();
 		void printSSA();
 		void printDotLang();
 
+		void reset();
+
 	private:
+		bool debug;
 		std::vector<Token> tokens;
 		int currPos;
 		tokenType sym;

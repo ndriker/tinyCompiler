@@ -1,0 +1,3 @@
+0: CONST #1
+1: CONST #2
+2: SUBOP(0)(1)

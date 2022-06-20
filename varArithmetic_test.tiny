@@ -1,0 +1,9 @@
+main
+    var a, b, c, d, e; 
+{
+    let a <- 2;
+    let b <- a + a;
+    let c <- b - a;
+    let d <- c * b;
+    let e <- d / b;
+}.
