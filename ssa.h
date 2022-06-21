@@ -41,18 +41,16 @@ class SSAValue {
         int constValue;
         int id;
         SSAValue *operand1, *operand2;
+		std::string op1Name, op2Name;
         SSAValue *prev, *next;
         SSAValue *inCreationOrder; 
         SSAValue *prevDomWithOpcode; // wtf is this
 
-		std::string name;
-		bool isVar;
 
 		int bbID;
 		bool firstInstOfBB;
 
-
-		void setNameType(std::string ssaName, bool ssaType);
+		void setOpNames(std::string operand1Name, std::string operand2Name);
 
 		// ssa value debugging functions
 		std::string getTextForEnum(int enumVal);
@@ -105,19 +103,15 @@ class SSAValue {
 class BasicBlock {
 	// we want a map between branch-to inst ids and branch bbs
 	public:
-		BasicBlock(bool ft);
 		std::string bbRepr();
 		SSAValue* getHead();
-		void setHead(SSAValue* bbHead);
 		SSAValue* getTail();
-		void setTail(SSAValue* bbTail);
 		int getID();
-		void setBBID(int bbID);
-	private:
 		int id;
-		bool incomingEdgeIsFT;
 		SSAValue* head;
 		SSAValue* tail;
+		BasicBlock* fallThrough;
+		BasicBlock* branch;
 
 };
 
@@ -139,6 +133,7 @@ class SSA {
     public:
         SSA();
         void addSSAValue(SSAValue* newSSAVal);
+		void addSSAConst(SSAValue* newSSAVal);
         SSAValue* SSACreate(opcode operation, SSAValue* x, SSAValue* y);
 		void SSACreate(opcode operation, SSAValue* y);
 		SSAValue* SSACreateWhilePhi(SSAValue* x, SSAValue* y);
@@ -172,6 +167,18 @@ class SSA {
         void printSSA();
 		void printSymTable();
 		void printConstTable();
+		std::string reprBasicBlocks(BasicBlock* head);
+
+	    // basic block functions
+		BasicBlock* createContext();
+		BasicBlock* createBlock();
+		void initBlock(BasicBlock* blockToInit);
+		void addInstToBB(SSAValue* inst);
+		void addInstToConstBB(SSAValue* inst);
+		void connectFT(BasicBlock* from, BasicBlock* to);
+		void connectBR(BasicBlock* from, BasicBlock* to);
+		BasicBlock* getContext();
+		void setContext(BasicBlock* ctx);
 
 		std::string genBBStart(int bbID);
 		std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> genBasicBlocks();
@@ -181,6 +188,8 @@ class SSA {
 		void reset();
     private:
         static int maxID; // current number of SSAValues created
+		static int numConsts;
+		static int maxBlockID;
 		static std::unordered_map<tokenType, opcode> brOpConversions;
 
         SSAValue* instList; // pointer to head of instruction list
@@ -196,7 +205,11 @@ class SSA {
 
         std::unordered_map<int, SSAValue*> constTable;
 
+		std::vector<BasicBlock*> basicBlocks;
 
+		BasicBlock* bbListHead;
+		BasicBlock* constBlock;
+		BasicBlock* context;
 
         
 };

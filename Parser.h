@@ -16,9 +16,9 @@ class Parser {
 		void setDebug(bool debugMode);
 
 		SSAValue* varRef();
-		SSAValue* factor();
-		SSAValue* term();
-		SSAValue* expression();
+		std::tuple<SSAValue*, std::string> factor();
+		std::tuple<SSAValue*, std::string> term();
+		std::tuple<SSAValue*, std::string> expression();
 		SSAValue* relation();
 
 		void assignment();
@@ -53,6 +53,7 @@ class Parser {
 
 		SSAValue* elseHead;
 		SSAValue* joinBlockHead;
+		BasicBlock* joinBlock;
 
 		std::unordered_map<std::string, SSAValue*> phiMap;
 

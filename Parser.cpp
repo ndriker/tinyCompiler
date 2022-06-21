@@ -79,33 +79,37 @@ SSAValue* Parser::varRef() {
 	std::string ident = getCurrentValue();
 	printItem("Identifier", ident);
 	SSAValue* identInst = ssa.findSymbol(ident);
-	identInst->setNameType(ident, true);
+	//identInst->setNameType(ident, true);
 
 	next(); // consume ident
 	decPrintInd();
 	return identInst;
 }
 
-SSAValue* Parser::factor() {
+std::tuple<SSAValue*, std::string> Parser::factor() {
 	startPrintBlock("Factor");
-
+	std::tuple<SSAValue*, std::string> leftTuple;
 	SSAValue* left;
-
+	std::string name = "";
 	if (sym == IDENT) {
+		name = getCurrentValue();
 		left = varRef();
+		std::cout << "Name from factor " << name << std::endl;
 	}
 	else if (sym == NUMBER) {
 		std::string numStr = getCurrentValue();
 		printItem("Number", numStr);
 		int num = stoi(numStr);
 		left = ssa.SSACreateConst(num);
-		left->setNameType("#" + numStr, false);
+		//left->setNameType("#" + numStr, false);
 		next();
 	}
 	else if (sym == L_PAREN) {
 		printItem("Left Paren");
 		next();
-		left = expression();
+		leftTuple = expression();
+		left = std::get<0>(leftTuple);
+		name = std::get<1>(leftTuple);
 
 		if (sym == R_PAREN) {
 			printItem("Right Paren");
@@ -127,72 +131,114 @@ SSAValue* Parser::factor() {
 	}
 	
 	decPrintInd();
-	return left;
+	//return left;
+	return std::make_tuple(left, name);
 }
 
-SSAValue* Parser::term() {
+std::tuple<SSAValue*, std::string> Parser::term() {
 	startPrintBlock("Term");
 	bool wasMul;
 
-	SSAValue* left;
-	SSAValue* right;
 
-	left = factor();
+	std::tuple<SSAValue*, std::string> leftTuple;
+	std::tuple<SSAValue*, std::string> rightTuple;
+
+
+
+	leftTuple = factor();
+	SSAValue* left = std::get<0>(leftTuple);
+	std::string leftName = std::get<1>(leftTuple);
+
 	while ((sym == MUL) || (sym == DIV)) {
 		wasMul = (sym == MUL) ? true : false;
 		printItem(getTextForEnum(sym));
 		next();
-		right = factor();
+		rightTuple = factor();
+		SSAValue* right = std::get<0>(rightTuple);
+		std::string rightName = std::get<1>(rightTuple);
 		if (wasMul) {
 			left = ssa.SSACreate(MULOP, left, right);
+
 		} else {
 			// sym == div
 			left = ssa.SSACreate(DIVOP, left, right);
 		}
+		left->setOpNames(leftName, rightName);
+		//if (loopCount < 1) {
+		//	left->setOpNames(leftName, rightName);
+		//} else {
+		//	left->setOpNames("", rightName);
+		//}
+
+		leftName = "_";
+
 	}
 
 	decPrintInd();
-	return left;
+	//return left;
+	return std::make_tuple(left, leftName);
 }
 
-SSAValue* Parser::expression() {
+std::tuple<SSAValue*, std::string> Parser::expression() {
 	startPrintBlock("Expression");
 	bool wasAdd;
-	SSAValue* left;
-	SSAValue* right;
+	std::tuple<SSAValue*, std::string> leftTuple;
+	std::tuple<SSAValue*, std::string> rightTuple;
 
-	left = term();
+	leftTuple = term();
+	SSAValue* left = std::get<0>(leftTuple);
+	std::string leftName = std::get<1>(leftTuple);
 	while ((sym == ADD) || (sym == SUB)) {
 		wasAdd = (sym == ADD) ? true : false;
 		printItem(getTextForEnum(sym));
 		next();
-		right = term();
+
+		rightTuple = term();
+		SSAValue* right = std::get<0>(rightTuple);
+		std::string rightName = std::get<1>(rightTuple);
 		if (wasAdd) {
 			left = ssa.SSACreate(ADDOP, left, right);
 		} else {
 			// sym == sub
 			left = ssa.SSACreate(SUBOP, left, right);
 		}
+
+		left->setOpNames(leftName, rightName);
+		//if (loopCount < 1) {
+		//	left->setOpNames(leftName, rightName);
+		//} else {
+		//	left->setOpNames("", rightName);
+		//}
+		leftName = "_";
 	}
 	decPrintInd();
-	return left;
+	return std::make_tuple(left, leftName);
 }
 
 SSAValue* Parser::relation() {
 	startPrintBlock("Relation");
+	std::tuple<SSAValue*, std::string> leftTuple;
+	std::tuple<SSAValue*, std::string> rightTuple;
 	SSAValue* left;
 	SSAValue* right = nullptr;
+	std::string leftName, rightName;
 	tokenType symCopy;
-	left = expression();
+	leftTuple = expression();
+	left = std::get<0>(leftTuple);
+	leftName = std::get<1>(leftTuple);
 	if ((sym >= 18) || (sym <= 23)) {
 		symCopy = sym;
 		printItem(getTextForEnum(sym));
 
 		// take sym to know which relational op it is
 		next();
-		right = expression();
+		rightTuple = expression();
+		right = std::get<0>(rightTuple);
+		rightName = std::get<1>(rightTuple);
 	}
 	SSAValue* cmp = ssa.SSACreate(CMP, left, right);
+	cmp->setOpNames(leftName, rightName);
+
 	elseHead = ssa.SSACreateNop();
 	SSAValue* rel = ssa.SSACreate(ssa.convertBr(symCopy), cmp, elseHead);
 	decPrintInd();
@@ -202,6 +248,7 @@ SSAValue* Parser::relation() {
 void Parser::assignment() {
 	startPrintBlock("Assignment");
 	std::string identName;
+	std::tuple<SSAValue*, std::string> leftTuple;
 	SSAValue* left;
 	if (sym == LET) {
 		printItem(getTextForEnum(sym));
@@ -216,11 +263,12 @@ void Parser::assignment() {
 				printItem(getTextForEnum(sym));
 
 				next(); // consume ASSIGN
-				left = expression();
+				leftTuple = expression();
+				left = std::get<0>(leftTuple);
 				ssa.addSymbol(identName, left);
-				if (left->op != CONST) {
-					left->setNameType(identName, true);
-				}
+				//if (left->op != CONST) {
+				//	left->setNameType(identName, true);
+				//}
 
 			} else {
 				error("Arrow Error");
@@ -259,7 +307,8 @@ void Parser::funcCall() {
 					printItem(getTextForEnum(sym));
 					next(); // consume right paren
 				} else {
-					SSAValue* result = expression();
+					std::tuple<SSAValue*, std::string> resultTuple = expression();
+					SSAValue* result = std::get<0>(resultTuple);
 					if (ident == "OutputNum") {
 						ssa.SSACreate(write, result);
 					}
@@ -293,23 +342,41 @@ void Parser::ifStatement() {
 	SSAValue* savedElseHead = elseHead;
 	SSAValue* savedJoinBlockHead = joinBlockHead;
 	std::unordered_map<std::string, SSAValue*> savedPhiMap = phiMap;
+	BasicBlock* savedJoinBlock = joinBlock;
+	joinBlock = ssa.createBlock();
 
+	//ssa.connectFT(joinBlock, savedJoinBlock);
 
 	if (sym == IF) {
 		printItem(getTextForEnum(sym));
 		next();
 		relation();
+		BasicBlock* splitBlock = ssa.getContext();
+		// remember split block
+		// create fall through block
+		// connect split to fall through block
+		// context switch to fall through block
+		BasicBlock* thenBlock;
 		if (sym == THEN) {
 			printItem(getTextForEnum(sym));
 			next();
 
 			phiMap = std::unordered_map<std::string, SSAValue*>();
+			thenBlock = ssa.createContext();
 			statSequence();
 			std::unordered_map<std::string, SSAValue*> thenPhiMap = phiMap;
+			ssa.connectFT(splitBlock, thenBlock);
+
 
 			if (sym == ELSE) {
+				// remember the then block
+				// create branch block
+				// connect split to branch block
+				// context switch to branch block
 				joinBlockHead = ssa.SSACreateNop();
 				ssa.SSACreate(BRA, joinBlockHead);
+
+				BasicBlock* elseBlock = ssa.createContext();
 				ssa.updateNop(elseHead);
 				printItem(getTextForEnum(sym));
 				next();
@@ -317,10 +384,19 @@ void Parser::ifStatement() {
 				phiMap = std::unordered_map<std::string, SSAValue*>();
 				
 				statSequence();
+
+				ssa.connectBR(splitBlock, elseBlock);
 				
 				std::unordered_map<std::string, SSAValue*> elsePhiMap = phiMap;
 				
+				ssa.initBlock(joinBlock);
+				ssa.setContext(joinBlock);
 				ssa.updateNop(joinBlockHead);
+
+
+				//joinBlock = ssa.createContext();
+				ssa.connectBR(thenBlock, joinBlock);
+				ssa.connectFT(elseBlock, joinBlock);
 
 				for (auto kv : thenPhiMap) {
 					try {
@@ -346,7 +422,14 @@ void Parser::ifStatement() {
 				// if there is no else, elseHead becomes 
 				//		the head of the join block, no branch needed
 				//		just fall through
+				ssa.initBlock(joinBlock);
+				ssa.setContext(joinBlock);
+				
+				
+				//joinBlock = ssa.createContext();
 				ssa.updateNop(elseHead);
+				ssa.connectFT(thenBlock, joinBlock);
+				ssa.connectBR(splitBlock, joinBlock);
 				for (auto kv : thenPhiMap) {
 					SSAValue* prevOccur = ssa.findSymbol(kv.first);
 					ssa.SSACreate(PHI, kv.second, prevOccur);
@@ -363,13 +446,21 @@ void Parser::ifStatement() {
 		} else {
 			error("Conditional statement must have 'then'");
 		}
-	} else {
+	} else {	
 		error("If statement must have 'if'");
 	}
+	//std::cout << "TAIL IS " << joinBlock->tail->instCFGRepr() << std::endl;
+	//if (joinBlock->tail->op == BRA) {
 
+	//	ssa.connectBR(joinBlock, savedJoinBlock);
+	//} else {
+	//	ssa.connectFT(joinBlock, savedJoinBlock);
+	//}
+	ssa.connectFT(joinBlock, savedJoinBlock);
 
 	elseHead = savedElseHead;
 	joinBlockHead = savedJoinBlockHead;
+	joinBlock = savedJoinBlock;
 	phiMap = savedPhiMap;
 	decPrintInd();
 }

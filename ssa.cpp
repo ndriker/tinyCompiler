@@ -27,23 +27,14 @@ void SSAValue::instRepr() {
 	}
 }
 
-std::string SSAValue::getType() {
-	std::string type;
-	if (isVar) {
-		type = "VAR";
-	} else {
-		type = "CONST";
-	}
-	return type;
-}
 
 std::string SSAValue::getNameType() {
-	std::string info = "; " + getType() + " " + name;
+	std::string info = "; ";
 	if (operand1 != nullptr) {
-		info += ", lArg: " + operand1->getType() + " " + operand1->name;
+		info += "lArg: " + op1Name;
 	}
 	if (operand2 != nullptr) {
-		info += ", rArg: " + operand2->getType() + " " + operand2->name;
+		info += ", rArg: " + op2Name;
 	}
 	return info;
 }
@@ -76,14 +67,17 @@ std::string SSAValue::instCFGRepr() {
 	return output;
 }
 
-void SSAValue::setNameType(std::string ssaName, bool ssaType) {
-	name = ssaName;
-	isVar = ssaType;
+void SSAValue::setOpNames(std::string operand1Name, std::string operand2Name) {
+	op1Name = operand1Name;
+	op2Name = operand2Name;
 }
 
 // ssa class
 
 int SSA::maxID = 0;
+int SSA::maxBlockID = 0;
+int SSA::numConsts = 0;
+
 std::unordered_map<tokenType, opcode> SSA::brOpConversions = {
 	{NEQ, BEQ},
 	{EQ, BNE},
@@ -99,24 +93,24 @@ opcode SSA::convertBr(tokenType type) {
 
 SSAValue* SSA::SSACreate(opcode operation, SSAValue* x, SSAValue* y) {
 	SSAValue* prevDomWithOpcode = nullptr;
-	if (operation >= ADDOP && operation <= DIVOP) {
-		// these ops can be involved in CSE
-		// search in symbol table for dominating inst with same opcode
-		// then search up the linked list looking for an inst that has same params
-		prevDomWithOpcode = findPrevDomWithOpcode(operation);
+	//if (operation >= ADDOP && operation <= DIVOP) {
+	//	// these ops can be involved in CSE
+	//	// search in symbol table for dominating inst with same opcode
+	//	// then search up the linked list looking for an inst that has same params
+	//	prevDomWithOpcode = findPrevDomWithOpcode(operation);
 
-		SSAValue* iter = prevDomWithOpcode;
-		while (iter != nullptr) {
-			//std::cout << "SSACreate prevDomWithOpcode" << iter->instCFGRepr() << std::endl;
-			if (iter->operand1 == x && iter->operand2 == y) {
+	//	SSAValue* iter = prevDomWithOpcode;
+	//	while (iter != nullptr) {
+	//		//std::cout << "SSACreate prevDomWithOpcode" << iter->instCFGRepr() << std::endl;
+	//		if (iter->operand1 == x && iter->operand2 == y) {
 
-				// found common subexpression
-				return iter;
-			}
-			iter = iter->prevDomWithOpcode;
-		}
+	//			// found common subexpression
+	//			return iter;
+	//		}
+	//		iter = iter->prevDomWithOpcode;
+	//	}
 
-	}
+	//}
 	SSAValue* result = new SSAValue();
 	result->id = maxID++;
 	result->op = operation;
@@ -153,11 +147,12 @@ SSAValue* SSA::SSACreateConst(int constVal) {
 	if (val == nullptr) {
 		SSAValue* ssaConst = new SSAValue();
 		ssaConst->op = CONST;
-		ssaConst->id = maxID++;
+		numConsts += 1;
+		ssaConst->id = -numConsts;
 		ssaConst->constValue = constVal;
 		addInOrder(ssaConst);
 		addConst(constVal, ssaConst);
-		addSSAValue(ssaConst);
+		addSSAConst(ssaConst);
 		return ssaConst;
 	}
 	return val;
@@ -213,6 +208,10 @@ SSA::SSA() {
 	instListLength = 0;
 	instTail = new SSAValue();
 	scopeDepth = 0;
+	createContext();
+	constBlock = new BasicBlock();
+	constBlock->id = -1;
+	//basicBlocks.push_back(context);
 	enterScope(); // built-in functions and computation var decls
 }
 
@@ -228,9 +227,23 @@ void SSA::addSSAValue(SSAValue* newSSAVal) {
 		instTail = newSSAVal;
 
 	}
+	addInstToBB(newSSAVal);
 	instListLength = instListLength + 1;
 }
+void SSA::addSSAConst(SSAValue* newSSAVal) {
+	if (instListLength == 0) {
+		instList = newSSAVal;
+		instTail = newSSAVal;
 
+	} else {
+		newSSAVal->next = instList;
+		instList->prev = newSSAVal;
+		instList = newSSAVal;
+
+	}
+	addInstToConstBB(newSSAVal);
+	instListLength = instListLength + 1;
+}
 // symbolTable functions
 
 void SSA::enterScope() {
@@ -335,162 +348,250 @@ void SSA::printConstTable() {
 	}
 }
 
-std::string SSA::genBBStart(int bbID) {
-	std::string bbIDStr = std::to_string(bbID);
-	std::string currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
-	return currentBB;
+std::string SSA::reprBasicBlocks(BasicBlock* head) {
+	//std::cout << head->id << std::endl;
+	//if (head == nullptr) {
+	//	return "";
+	//} else {
+	//	std::cout << head->id << std::endl;
+	//	return head->bbRepr();
+	//}
+	//std::string ft = reprBasicBlocks(head->fallThrough);
+	//std::string br = reprBasicBlocks(head->branch);
+	////std::cout << ft << "\n" << br << std::endl;
+	connectFT(constBlock, bbListHead);
+	basicBlocks.push_back(constBlock);
+	std::string out_string;
+	for (BasicBlock* bb : basicBlocks) {
+		out_string += bb->bbRepr() + "\n";
+	}
+	return out_string;
+
+	
+
 }
 
-std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> SSA::genBasicBlocks() {
-	/*
-		if a branch instruction is found
-			close current bb (include branch inst in current bb)
-			create new bb
-			store branch-to id for new block
-		else
-		    if id was previously a branch-to id
-			    close current bb
-				create new bb
-			else
-			    just add inst to bb
-	*/
+//std::string SSA::genBBStart(int bbID) {
+//	std::string bbIDStr = std::to_string(bbID);
+//	std::string currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
+//	return currentBB;
+//}
 
-	SSAValue* current = instList; 
-	SSAValue* prevCurrent = current;
-	std::unordered_map<int, BasicBlock*> branchToBlocks; // inst ids for when to create new bb
-	std::vector<BasicBlock*> basicBlocks;
-	std::vector<BBEdge*> bbEdges;
-
-	BasicBlock* currentBB = nullptr;
-	int bbID = 1;
-
-
-	while (current != nullptr) {
-		if (currentBB == nullptr) {
-			currentBB = new BasicBlock(true);
-			currentBB->setBBID(1);
-			currentBB->setHead(current);
-			currentBB->setTail(current);
-		}
-		if (current->op <= 17 && current->op >= 11) {
-			// any branch inst
-			// close current block, create new block, and store branch-to id for new block later
-			currentBB->setTail(current);
-			bbID += 1;
-			basicBlocks.push_back(currentBB);
-
-
-
-
-
-			currentBB = new BasicBlock(true);
-			currentBB->setHead(current->next);
-			currentBB->setTail(current);
-			currentBB->setBBID(bbID);
-
-			BBEdge* newEdge = new BBEdge(basicBlocks.back(), currentBB, "ft");
-			bbEdges.push_back(newEdge);
-
-			
-
-
-
-			// at this point, currentBB is FT block (edge to it from split block must be ft edge)
-
-			int newBlockID;
-			if (current->op == BRA) {
-				// bra inst
-				newBlockID = current->operand1->id;
-
-			} else {
-				// all other branch insts (12 <= op <= 17)
-				newBlockID = current->operand2->id;
-
-			}
-			// before creating branch block, first check that the inst does not exist above
-			bool found = false;
-			BasicBlock* jumpToBlock = nullptr;
-			for (BasicBlock* bb : basicBlocks) {
-				SSAValue* bbHead = bb->getHead();
-				SSAValue* bbTail = bb->getTail();
-				while (bbHead != bbTail->next) {
-					if (bbHead->id == newBlockID) {
-						found = true;
-						jumpToBlock = bb;
-						break;
-					}
-
-					bbHead = bbHead->next;
-				}
-			}
-			std::cout << "FOUND is " << found << std::endl;
-			if (!found) {
-				BasicBlock* branchBlock = new BasicBlock(false);
-				branchToBlocks.insert({ newBlockID, branchBlock });
-				BBEdge* newEdge = new BBEdge(basicBlocks.back(), branchBlock, "br");
-				bbEdges.push_back(newEdge);
-			} else {
-				BBEdge* newEdge = new BBEdge(basicBlocks.back(), jumpToBlock, "br");
-				bbEdges.push_back(newEdge);
-
-			}
-
-		} else {
-			bool mustCreateNewBlock = false;
-			// check if current inst id needs to be start of new bb
-			BasicBlock* branchToBlock = nullptr;
-			for (auto kv : branchToBlocks) {
-				if (current->id == kv.first) {
-					branchToBlock = kv.second;
-					break;
-				}
-			}
-			if (branchToBlock != nullptr) {
-				basicBlocks.push_back(currentBB);
-				bbID += 1;
-				currentBB = branchToBlock;
-				currentBB->setBBID(bbID);
-				currentBB->setHead(current);
-				currentBB->setTail(current);
-				// at this point, new block is a branch-to block, must have edge type of branch
-			} else {
-				// just add instruction to current block
-				if (currentBB->getHead() == nullptr) {
-					currentBB->setHead(current);
-				}
-				currentBB->setTail(current);
-			}
-		}
-		prevCurrent = current;
-		current = current->next;
-	}
-	currentBB->setTail(prevCurrent); // questionable
-	basicBlocks.push_back(currentBB);
-
-	return std::make_tuple(basicBlocks, bbEdges);
+//std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> SSA::genBasicBlocks() {
+//	/*
+//		if a branch instruction is found
+//			close current bb (include branch inst in current bb)
+//			create new bb
+//			store branch-to id for new block
+//		else
+//		    if id was previously a branch-to id
+//			    close current bb
+//				create new bb
+//			else
+//			    just add inst to bb
+//	*/
+//
+//	SSAValue* current = instList; 
+//	SSAValue* prevCurrent = current;
+//	std::unordered_map<int, BasicBlock*> branchToBlocks; // inst ids for when to create new bb
+//	std::vector<BasicBlock*> basicBlocks;
+//	std::vector<BBEdge*> bbEdges;
+//
+//	BasicBlock* currentBB = nullptr;
+//	int bbID = 1;
+//
+//
+//	while (current != nullptr) {
+//		if (currentBB == nullptr) {
+//			currentBB = new BasicBlock(true);
+//			currentBB->setBBID(1);
+//			currentBB->setHead(current);
+//			currentBB->setTail(current);
+//		}
+//		if (current->op <= 17 && current->op >= 11) {
+//			// any branch inst
+//			// close current block, create new block, and store branch-to id for new block later
+//			currentBB->setTail(current);
+//			bbID += 1;
+//			basicBlocks.push_back(currentBB);
+//
+//
+//
+//
+//
+//			currentBB = new BasicBlock(true);
+//			currentBB->setHead(current->next);
+//			currentBB->setTail(current);
+//			currentBB->setBBID(bbID);
+//
+//			BBEdge* newEdge = new BBEdge(basicBlocks.back(), currentBB, "ft");
+//			bbEdges.push_back(newEdge);
+//
+//			
+//
+//
+//
+//			// at this point, currentBB is FT block (edge to it from split block must be ft edge)
+//
+//			int newBlockID;
+//			if (current->op == BRA) {
+//				// bra inst
+//				newBlockID = current->operand1->id;
+//
+//			} else {
+//				// all other branch insts (12 <= op <= 17)
+//				newBlockID = current->operand2->id;
+//
+//			}
+//			// before creating branch block, first check that the inst does not exist above
+//			bool found = false;
+//			BasicBlock* jumpToBlock = nullptr;
+//			for (BasicBlock* bb : basicBlocks) {
+//				SSAValue* bbHead = bb->getHead();
+//				SSAValue* bbTail = bb->getTail();
+//				while (bbHead != bbTail->next) {
+//					if (bbHead->id == newBlockID) {
+//						found = true;
+//						jumpToBlock = bb;
+//						break;
+//					}
+//
+//					bbHead = bbHead->next;
+//				}
+//			}
+//			std::cout << "FOUND is " << found << std::endl;
+//			if (!found) {
+//				BasicBlock* branchBlock = new BasicBlock(false);
+//				branchToBlocks.insert({ newBlockID, branchBlock });
+//				BBEdge* newEdge = new BBEdge(basicBlocks.back(), branchBlock, "br");
+//				bbEdges.push_back(newEdge);
+//			} else {
+//				BBEdge* newEdge = new BBEdge(basicBlocks.back(), jumpToBlock, "br");
+//				bbEdges.push_back(newEdge);
+//
+//			}
+//
+//		} else {
+//			bool mustCreateNewBlock = false;
+//			// check if current inst id needs to be start of new bb
+//			BasicBlock* branchToBlock = nullptr;
+//			for (auto kv : branchToBlocks) {
+//				if (current->id == kv.first) {
+//					branchToBlock = kv.second;
+//					break;
+//				}
+//			}
+//			if (branchToBlock != nullptr) {
+//				basicBlocks.push_back(currentBB);
+//				bbID += 1;
+//				currentBB = branchToBlock;
+//				currentBB->setBBID(bbID);
+//				currentBB->setHead(current);
+//				currentBB->setTail(current);
+//				// at this point, new block is a branch-to block, must have edge type of branch
+//			} else {
+//				// just add instruction to current block
+//				if (currentBB->getHead() == nullptr) {
+//					currentBB->setHead(current);
+//				}
+//				currentBB->setTail(current);
+//			}
+//		}
+//		prevCurrent = current;
+//		current = current->next;
+//	}
+//	currentBB->setTail(prevCurrent); // questionable
+//	basicBlocks.push_back(currentBB);
+//
+//	return std::make_tuple(basicBlocks, bbEdges);
 	//std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> info;
 	//info->basicBlocks = basicBlocks;
 	//info->bbEdges = bbEdges;
 	//return info;
-}
+//}
 
 void SSA::gen() {
-	std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> info = genBasicBlocks();
-	std::vector<BasicBlock*> basicBlocks = std::get<0>(info);
-	std::vector<BBEdge*> bbEdges = std::get<1>(info);
+	//std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> info = genBasicBlocks();
+	//std::vector<BasicBlock*> basicBlocks = std::get<0>(info);
+	//std::vector<BBEdge*> bbEdges = std::get<1>(info);
 	std::cout << "digraph prog {" << std::endl;
 
-	for (BasicBlock* bb: basicBlocks) {
-		std::cout << bb->bbRepr() << std::endl;
-	}
+	std::cout << reprBasicBlocks(bbListHead) << std::endl;
+	//for (BasicBlock* bb: basicBlocks) {
+	//	std::cout << bb->bbRepr() << std::endl;
+	//}
 
-	for (BBEdge* edge : bbEdges) {
-		std::cout << edge->bbEdgeRepr() << std::endl;
-	}
+	//for (BBEdge* edge : bbEdges) {
+	//	std::cout << edge->bbEdgeRepr() << std::endl;
+	//}
 
 	std::cout << "}" << std::endl;
 }
 
+BasicBlock* SSA::createContext() {
+	BasicBlock* newBlock = new BasicBlock();
+	newBlock->id = maxBlockID++;
+	if (bbListHead == nullptr) {
+		bbListHead = newBlock;
+	}
+	context = newBlock;
+	basicBlocks.push_back(context);
+	return newBlock;
+}
+
+void SSA::addInstToBB(SSAValue* inst) {
+	if (context->head == nullptr) {
+		context->head = inst;
+	}
+
+	context->tail = inst;
+}
+
+void SSA::addInstToConstBB(SSAValue* inst) {
+	if (constBlock->tail == nullptr) {
+		constBlock->tail = inst;
+	}
+	constBlock->head = inst;
+
+}
+
+void SSA::connectFT(BasicBlock* from, BasicBlock* to) {
+
+	if (context->fallThrough != nullptr) {
+		std::cout << "FT" << context->id << " " << context->fallThrough->id << "BAD" << std::endl;
+	}
+	if (from->fallThrough == nullptr) {
+
+		from->fallThrough = to;
+	}
+}
+
+void SSA::connectBR(BasicBlock* from, BasicBlock* to) {
+	if (context->branch != nullptr) {
+		std::cout << "BR" << context->branch->id << "BAD" << std::endl;
+	}
+	if (from->branch == nullptr) {
+		from->branch = to;
+	}
+}
+
+BasicBlock* SSA::getContext() {
+	return context;
+}
+
+void SSA::setContext(BasicBlock* ctx) {
+	context = ctx;
+}
+
+BasicBlock* SSA::createBlock() {
+	return new BasicBlock();
+}
+
+void SSA::initBlock(BasicBlock* blockToInit) {
+	blockToInit->id = maxBlockID++;
+	basicBlocks.push_back(blockToInit);
+
+}
 //void SSA::generateDotLang() {
 //	
 //	std::unordered_map<int, BBEdge*> branchEdgeMap;
@@ -640,41 +741,51 @@ void SSA::gen() {
 
 // BasicBlock
 
-BasicBlock::BasicBlock(bool ft) {
-	head = nullptr;
-	tail = nullptr;
-	id = 0;
-	incomingEdgeIsFT = ft;
-}
+
+//BasicBlock::BasicBlock(bool ft) {
+//	head = nullptr;
+//	tail = nullptr;
+//	id = 0;
+//	incomingEdgeIsFT = ft;
+//}
 
 SSAValue* BasicBlock::getHead() {
 	return head;
 }
 
-void BasicBlock::setHead(SSAValue* bbHead) {
-	head = bbHead;
-}
+//void BasicBlock::setHead(SSAValue* bbHead) {
+//	head = bbHead;
+//}
 
 SSAValue* BasicBlock::getTail() {
 	return tail;
 }
 
-void BasicBlock::setTail(SSAValue* bbTail) {
-	tail = bbTail;
-}
+//void BasicBlock::setTail(SSAValue* bbTail) {
+//	tail = bbTail;
+//}
 
 int BasicBlock::getID() {
 	return id;
 }
 
-void BasicBlock::setBBID(int bbID) {
-	id = bbID;
-}
+//void BasicBlock::setBBID(int bbID) {
+//	id = bbID;
+//}
 
 std::string BasicBlock::bbRepr() {
 	SSAValue* current = head;
-	SSAValue* stopAt = tail->next;
+
+	SSAValue* stopAt;
+	if (tail == nullptr) {
+		stopAt= head;
+	} else {
+		stopAt = tail->next;
+	}
 	std::string bbIDStr = std::to_string(id);
+	if (id == -1) {
+		bbIDStr = "CONST";
+	}
 	std::string bbString = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
 	while (current != stopAt) {
 		bbString = bbString + current->instCFGRepr() + "|";
@@ -682,6 +793,27 @@ std::string BasicBlock::bbRepr() {
 	}
 	bbString.pop_back();
 	bbString = bbString + "}\"];";
+	if (fallThrough != nullptr) {
+		std::string fromIDStr = std::to_string(id);
+		std::string type = "FT";
+		if (id == -1) {
+			fromIDStr = "CONST";
+			type = "";
+		}
+		std::string toIDStr = std::to_string(fallThrough->id);
+
+		if (tail != nullptr && tail->op == BRA) {
+			type = "BR";
+		}
+		std::string out = "bb" + fromIDStr + ":s -> bb" + toIDStr + ":n [label=\"" + type + "\"];";
+		bbString += "\n" + out;
+	}
+	if (branch != nullptr) {
+		std::string fromIDStr = std::to_string(id);
+		std::string toIDStr = std::to_string(branch->id);
+		std::string out = "bb" + fromIDStr + ":s -> bb" + toIDStr + ":n [label=\"" + "BR" + "\"];";
+		bbString += "\n" + out;
+	}
 	return bbString;
 }
 

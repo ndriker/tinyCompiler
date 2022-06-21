@@ -1,8 +1,25 @@
 main 
     var a, b, c;
 {
-    let a <- 1 + 2;
-    let b <- 2;
-    let c <- a + b;
+   let a <- 1;
+   let b <- 2;
 
+   if a < b then
+       let a <- a + b;
+   else
+       let b <- 3;
+       let b <- a + b;
 }.
+/*
+0: CONST #1;
+1: CONST #2;
+2: ADDOP(0)(1); lArg: a, rArg: b
+3: MULOP(0)(1); lArg: a, rArg: b
+4: DIVOP(3)(0); lArg: _, rArg: a
+5: MULOP(4)(1); lArg: _, rArg: b
+6: SUBOP(2)(5); lArg: _, rArg: _
+
+sym table
+a | (0)
+b | (1)
+*/
