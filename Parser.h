@@ -2,6 +2,7 @@
 #define __PARSER_H__
 
 #include <vector>
+#include <unordered_map>
 #include "token.h"
 #include "ssa.h"
 
@@ -22,7 +23,7 @@ class Parser {
 		SSAValue* relation();
 
 		void assignment();
-		void funcCall();
+		SSAValue* funcCall();
 		void ifStatement();
 		void whileStatement();
 		void returnStatement();
@@ -49,7 +50,10 @@ class Parser {
 		int currPos;
 		tokenType sym;
 		int currentPrintIndent;
-		SSA ssa;
+		SSA* ssa; // current ssa that is in context
+		std::unordered_map<std::string, SSA*> programSSAs;
+		std::unordered_map<int, SSAValue*>* constTable;
+		BasicBlock* constBlock;
 
 		SSAValue* elseHead;
 		SSAValue* joinBlockHead;

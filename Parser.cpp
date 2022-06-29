@@ -78,7 +78,7 @@ SSAValue* Parser::varRef() {
 
 	std::string ident = getCurrentValue();
 	printItem("Identifier", ident);
-	SSAValue* identInst = ssa.findSymbol(ident);
+	SSAValue* identInst = ssa->findSymbol(ident);
 	//identInst->setNameType(ident, true);
 
 	next(); // consume ident
@@ -100,7 +100,7 @@ std::tuple<SSAValue*, std::string> Parser::factor() {
 		std::string numStr = getCurrentValue();
 		printItem("Number", numStr);
 		int num = stoi(numStr);
-		left = ssa.SSACreateConst(num);
+		left = ssa->SSACreateConst(num);
 		//left->setNameType("#" + numStr, false);
 		next();
 	}
@@ -120,9 +120,9 @@ std::tuple<SSAValue*, std::string> Parser::factor() {
 		}
 	}
 	else if (sym == CALL) {
-		funcCall();
+		left = funcCall();
 		// TODO
-		left = new SSAValue();
+		//left = new SSAValue();
 	}
 	else {
 		error("No Production Exists for your input");
@@ -157,11 +157,11 @@ std::tuple<SSAValue*, std::string> Parser::term() {
 		SSAValue* right = std::get<0>(rightTuple);
 		std::string rightName = std::get<1>(rightTuple);
 		if (wasMul) {
-			left = ssa.SSACreate(MULOP, left, right);
+			left = ssa->SSACreate(MULOP, left, right);
 
 		} else {
 			// sym == div
-			left = ssa.SSACreate(DIVOP, left, right);
+			left = ssa->SSACreate(DIVOP, left, right);
 		}
 		left->setOpNames(leftName, rightName);
 		//if (loopCount < 1) {
@@ -197,10 +197,10 @@ std::tuple<SSAValue*, std::string> Parser::expression() {
 		SSAValue* right = std::get<0>(rightTuple);
 		std::string rightName = std::get<1>(rightTuple);
 		if (wasAdd) {
-			left = ssa.SSACreate(ADDOP, left, right);
+			left = ssa->SSACreate(ADDOP, left, right);
 		} else {
 			// sym == sub
-			left = ssa.SSACreate(SUBOP, left, right);
+			left = ssa->SSACreate(SUBOP, left, right);
 		}
 
 		left->setOpNames(leftName, rightName);
@@ -236,11 +236,11 @@ SSAValue* Parser::relation() {
 		right = std::get<0>(rightTuple);
 		rightName = std::get<1>(rightTuple);
 	}
-	SSAValue* cmp = ssa.SSACreate(CMP, left, right);
+	SSAValue* cmp = ssa->SSACreate(CMP, left, right);
 	cmp->setOpNames(leftName, rightName);
 
-	elseHead = ssa.SSACreateNop();
-	SSAValue* rel = ssa.SSACreate(ssa.convertBr(symCopy), cmp, elseHead);
+	elseHead = ssa->SSACreateNop();
+	SSAValue* rel = ssa->SSACreate(ssa->convertBr(symCopy), cmp, elseHead);
 	decPrintInd();
 	return rel;
 }
@@ -265,7 +265,7 @@ void Parser::assignment() {
 				next(); // consume ASSIGN
 				leftTuple = expression();
 				left = std::get<0>(leftTuple);
-				ssa.addSymbol(identName, left);
+				ssa->addSymbol(identName, left);
 				//if (left->op != CONST) {
 				//	left->setNameType(identName, true);
 				//}
@@ -285,17 +285,16 @@ void Parser::assignment() {
 
 }
 
-void Parser::funcCall() {
+SSAValue* Parser::funcCall() {
 	startPrintBlock("Function Call");
+
 	if (sym == CALL) {
 		printItem(getTextForEnum(sym));
 		next();
 		if (sym == IDENT) {
 			printItem(getTextForEnum(sym), getCurrentValue());
 			std::string ident = getCurrentValue();
-			if (ident == "InputNum") {
-				ssa.SSACreate(read, nullptr, nullptr);
-			}
+
 			next();
 			
 
@@ -304,14 +303,18 @@ void Parser::funcCall() {
 				printItem(getTextForEnum(sym));
 				next(); // consume left paren
 				if (sym == R_PAREN) {
+					// case of no arguments
+
 					printItem(getTextForEnum(sym));
 					next(); // consume right paren
+
+					//if (ident == "InputNum") {
+					//	return ssa->SSACreate(read, nullptr, nullptr);
+					//}
 				} else {
 					std::tuple<SSAValue*, std::string> resultTuple = expression();
 					SSAValue* result = std::get<0>(resultTuple);
-					if (ident == "OutputNum") {
-						ssa.SSACreate(write, result);
-					}
+
 					while (sym == COMMA) {
 						printItem(getTextForEnum(sym));
 						next(); // consume comma
@@ -321,10 +324,20 @@ void Parser::funcCall() {
 					if (sym == R_PAREN) {
 						printItem(getTextForEnum(sym));
 						next();
+						if (ident == "OutputNum") {
+							ssa->SSACreate(write, result);
+							return nullptr;
+						}
 					} else {
 						error("Mismatched Parentheses");
 					}
 				}
+			}
+			if (ident == "InputNum") {
+				return ssa->SSACreate(read, nullptr, nullptr);
+			} else if (ident == "OutputNewLine") {
+				ssa->SSACreate(writeNL, nullptr, nullptr);
+				return nullptr;
 			}
 		} else {
 			error("Call must have identifier");
@@ -343,15 +356,16 @@ void Parser::ifStatement() {
 	SSAValue* savedJoinBlockHead = joinBlockHead;
 	std::unordered_map<std::string, SSAValue*> savedPhiMap = phiMap;
 	BasicBlock* savedJoinBlock = joinBlock;
-	joinBlock = ssa.createBlock();
+	joinBlock = ssa->createBlock();
+	ssa->setJoinType(joinBlock, "if");
 
-	//ssa.connectFT(joinBlock, savedJoinBlock);
+	//ssa->connectFT(joinBlock, savedJoinBlock);
 
 	if (sym == IF) {
 		printItem(getTextForEnum(sym));
 		next();
 		relation();
-		BasicBlock* splitBlock = ssa.getContext();
+		BasicBlock* splitBlock = ssa->getContext();
 		// remember split block
 		// create fall through block
 		// connect split to fall through block
@@ -362,10 +376,10 @@ void Parser::ifStatement() {
 			next();
 
 			phiMap = std::unordered_map<std::string, SSAValue*>();
-			thenBlock = ssa.createContext();
+			thenBlock = ssa->createContext();
 			statSequence();
+			ssa->connectFT(splitBlock, thenBlock);
 			std::unordered_map<std::string, SSAValue*> thenPhiMap = phiMap;
-			ssa.connectFT(splitBlock, thenBlock);
 
 
 			if (sym == ELSE) {
@@ -373,11 +387,11 @@ void Parser::ifStatement() {
 				// create branch block
 				// connect split to branch block
 				// context switch to branch block
-				joinBlockHead = ssa.SSACreateNop();
-				ssa.SSACreate(BRA, joinBlockHead);
+				joinBlockHead = ssa->SSACreateNop();
+				ssa->SSACreate(BRA, joinBlockHead);
 
-				BasicBlock* elseBlock = ssa.createContext();
-				ssa.updateNop(elseHead);
+				BasicBlock* elseBlock = ssa->createContext();
+				ssa->updateNop(elseHead);
 				printItem(getTextForEnum(sym));
 				next();
 
@@ -385,55 +399,55 @@ void Parser::ifStatement() {
 				
 				statSequence();
 
-				ssa.connectBR(splitBlock, elseBlock);
+				ssa->connectBR(splitBlock, elseBlock);
 				
 				std::unordered_map<std::string, SSAValue*> elsePhiMap = phiMap;
 				
-				ssa.initBlock(joinBlock);
-				ssa.setContext(joinBlock);
-				ssa.updateNop(joinBlockHead);
+				ssa->initBlock(joinBlock);
+				ssa->setContext(joinBlock);
+				ssa->updateNop(joinBlockHead);
 
 
-				//joinBlock = ssa.createContext();
-				ssa.connectBR(thenBlock, joinBlock);
-				ssa.connectFT(elseBlock, joinBlock);
+				//joinBlock = ssa->createContext();
+				ssa->connectBR(thenBlock, joinBlock);
+				ssa->connectFT(elseBlock, joinBlock);
 
 				for (auto kv : thenPhiMap) {
 					try {
 						SSAValue* val = elsePhiMap.at(kv.first);
-						ssa.SSACreate(PHI, kv.second, val);
+						ssa->SSACreate(PHI, kv.second, val);
 						elsePhiMap.erase(kv.first);
-						ssa.addSymbol(kv.first, ssa.getTail());
+						ssa->addSymbol(kv.first, ssa->getTail());
 					}
 					catch (std::out_of_range& oor) {
-						SSAValue* prevOccur = ssa.findSymbol(kv.first);
-						ssa.SSACreate(PHI, kv.second, prevOccur);
-						ssa.addSymbol(kv.first, ssa.getTail());
+						SSAValue* prevOccur = ssa->findSymbol(kv.first);
+						ssa->SSACreate(PHI, kv.second, prevOccur);
+						ssa->addSymbol(kv.first, ssa->getTail());
 
 					}
 				}
 				for (auto kv : elsePhiMap) {
-					SSAValue* prevOccur = ssa.findSymbol(kv.first);
-					ssa.SSACreate(PHI, prevOccur, kv.second);
-					ssa.addSymbol(kv.first, ssa.getTail());
+					SSAValue* prevOccur = ssa->findSymbol(kv.first);
+					ssa->SSACreate(PHI, prevOccur, kv.second);
+					ssa->addSymbol(kv.first, ssa->getTail());
 
 				}
 			} else {
 				// if there is no else, elseHead becomes 
 				//		the head of the join block, no branch needed
 				//		just fall through
-				ssa.initBlock(joinBlock);
-				ssa.setContext(joinBlock);
+				ssa->initBlock(joinBlock);
+				ssa->setContext(joinBlock);
 				
 				
-				//joinBlock = ssa.createContext();
-				ssa.updateNop(elseHead);
-				ssa.connectFT(thenBlock, joinBlock);
-				ssa.connectBR(splitBlock, joinBlock);
+				//joinBlock = ssa->createContext();
+				ssa->updateNop(elseHead);
+				ssa->connectFT(thenBlock, joinBlock);
+				ssa->connectBR(splitBlock, ssa->getContext());
 				for (auto kv : thenPhiMap) {
-					SSAValue* prevOccur = ssa.findSymbol(kv.first);
-					ssa.SSACreate(PHI, kv.second, prevOccur);
-					ssa.addSymbol(kv.first, ssa.getTail());
+					SSAValue* prevOccur = ssa->findSymbol(kv.first);
+					ssa->SSACreate(PHI, kv.second, prevOccur);
+					ssa->addSymbol(kv.first, ssa->getTail());
 
 				}
 			}
@@ -452,11 +466,13 @@ void Parser::ifStatement() {
 	//std::cout << "TAIL IS " << joinBlock->tail->instCFGRepr() << std::endl;
 	//if (joinBlock->tail->op == BRA) {
 
-	//	ssa.connectBR(joinBlock, savedJoinBlock);
+	//	ssa->connectBR(joinBlock, savedJoinBlock);
 	//} else {
-	//	ssa.connectFT(joinBlock, savedJoinBlock);
+	//	ssa->connectFT(joinBlock, savedJoinBlock);
 	//}
-	ssa.connectFT(joinBlock, savedJoinBlock);
+	if (savedJoinBlock != nullptr && savedJoinBlock->joinType != "while") {
+		ssa->connectFT(joinBlock, savedJoinBlock);
+	}
 
 	elseHead = savedElseHead;
 	joinBlockHead = savedJoinBlockHead;
@@ -471,48 +487,96 @@ void Parser::whileStatement() {
 	SSAValue* savedElseHead = elseHead;
 	SSAValue* savedJoinBlockHead = joinBlockHead;
 	std::unordered_map<std::string, SSAValue*> savedPhiMap = phiMap;
-
+	BasicBlock* savedJoinBlock = joinBlock;
+	bool savedInWhile = ssa->getInWhile();
+	//joinBlock = ssa->createBlock();
+	//ssa->initBlock(joinBlock);
+	//ssa->setContext(joinBlock);
+	ssa->setInWhile(true);
+	BasicBlock* followBlock = nullptr;
+	joinBlock = ssa->getContext();
+	ssa->setJoinType(joinBlock, "while");
 	if (sym == WHILE) {
 		printItem(getTextForEnum(sym));
 		next();
 		SSAValue* branchInst = relation();
-
-		joinBlockHead = ssa.SSACreateNop();
+		BasicBlock* whileBodyBlock = ssa->createContext();
+		joinBlockHead = ssa->SSACreateNop();
 
 		if (sym == DO) {
 			printItem(getTextForEnum(sym));
 			next();
 			phiMap = std::unordered_map<std::string, SSAValue*>();
-			SSAValue* whileBodyHead = ssa.SSACreateNop();
-			ssa.updateNop(whileBodyHead);
+			SSAValue* whileBodyHead = ssa->SSACreateNop();
+			ssa->updateNop(whileBodyHead);
 			statSequence();
-			ssa.SSACreate(BRA, joinBlockHead);
-			SSAValue* whileBodyTail = ssa.getTail();
+			ssa->SSACreate(BRA, joinBlockHead);
+			SSAValue* whileBodyTail = ssa->getTail();
 
-			std::unordered_map<std::string, SSAValue*> whilePhiMap = phiMap;
+			// our design choice for variables is that they are always global (i.e. can't create a variable local to one specific scope)
+			// as a result, any assignment in a basic block generates a phi instruction, even if the variable was not previously defined 
+			//     in outer scopes
 
-			ssa.updateNop(joinBlockHead);
+			// at this point, we are in the scope immediately outside of while body
+			// for every assignment inside of while body
+			//     create a phi instruction in the join block with assignment from while body on left, and most recent outer assignment on right
+			//	
+			std::unordered_map<std::string, SSAValue*> whilePhiMap = phiMap; // scope symbol table of while body
+			ssa->connectFT(joinBlock, whileBodyBlock);
+			ssa->connectBR(ssa->getContext(), joinBlock);
+			ssa->setContext(joinBlock, true);
+			ssa->updateNop(joinBlockHead);
+			std::cout << joinBlockHead->instCFGRepr() << std::endl;
+
 			SSAValue* joinBlockTail = joinBlockHead;
-
-			std::unordered_map<SSAValue*, SSAValue*> idChanges;
+			                   // argName         // prevId       // changeToID
+			std::unordered_map<std::string, std::tuple<SSAValue*, SSAValue*>> idChanges;
+			//std::unordered_map<SSAValue*, SSAValue*> idChanges;
 			for (auto kv : whilePhiMap) {
-				SSAValue* prevOccur = ssa.findSymbol(kv.first);
-				SSAValue* phiInst = ssa.SSACreate(PHI, prevOccur, kv.second);
-				idChanges.insert_or_assign(prevOccur, phiInst);
+				SSAValue* prevOccur = ssa->findSymbol(kv.first); // outer scope value
+				SSAValue* phiInst = ssa->SSACreate(PHI, prevOccur, kv.second); 
+				std::tuple<SSAValue*, SSAValue*> replaceInfo = std::make_tuple(prevOccur, phiInst);
+				idChanges.insert_or_assign(kv.first, replaceInfo); 
 				joinBlockTail = phiInst;
-				ssa.addSymbol(kv.first, ssa.getTail());
+				ssa->addSymbol(kv.first, ssa->getTail());
 			}
 
 			SSAValue* aboveCmpInst = branchInst->prev->prev;
 
 
 			SSAValue* cmpInst = branchInst->prev;
+			SSAValue* cmpLeftOp = cmpInst->operand1;
+			SSAValue* cmpRightOp = cmpInst->operand2;
+			//std::cout << "cmp left op ";
+			//cmpLeftOp->instRepr();
 			try {
-				cmpInst->operand1 = idChanges.at(cmpInst->operand1);
+				std::string cmpLeftName = cmpInst->op1Name;
+				std::tuple<SSAValue*, SSAValue*> replaceInfo = idChanges.at(cmpLeftName);
+				if (cmpLeftOp == std::get<0>(replaceInfo)) {
+					cmpInst->operand1 = std::get<1>(replaceInfo);
+				}
 			} catch (std::out_of_range& oor) {
-				std::cout << "Most likely infinite loop, check that you are modifying the loop control variable." << std::endl;
-				throw std::logic_error("Most likely infinite loop, check that you are modifying the loop control variable.");
+				// intentionally left blank
 			}
+
+			try {
+				std::string cmpRightName = cmpInst->op2Name;
+				std::tuple<SSAValue*, SSAValue*> replaceInfo = idChanges.at(cmpRightName);
+				if (cmpRightOp == std::get<0>(replaceInfo)) {
+					cmpInst->operand2 = std::get<1>(replaceInfo);
+				}
+			}
+			catch (std::out_of_range& oor) {
+				// intentionally left blank
+			}
+
+
+			//try {
+			//	cmpInst->operand1 = idChanges.at(cmpInst->operand1);
+			//} catch (std::out_of_range& oor) {
+			//	std::cout << "Most likely infinite loop, check that you are modifying the loop control variable." << std::endl;
+			//	throw std::logic_error("Most likely infinite loop, check that you are modifying the loop control variable.");
+			//}
 
 
 			aboveCmpInst->next = joinBlockHead;
@@ -526,24 +590,107 @@ void Parser::whileStatement() {
 			branchInst->next = whileBodyHead;
 			whileBodyHead->prev = branchInst;
 
-			ssa.setInstTail(whileBodyTail);
+			ssa->setInstTail(whileBodyTail);
 
-			ssa.updateNop(elseHead);
+			followBlock = ssa->createContext(); // also does setContext
+			ssa->connectBR(joinBlock, followBlock);
+			ssa->updateNop(elseHead);
 
 			SSAValue* ssaAtIndexInBody = whileBodyHead;
+			std::unordered_map<SSAValue*, SSAValue*> instReplacements;
+
 			while (ssaAtIndexInBody != whileBodyTail) {
+				SSAValue* leftOp = ssaAtIndexInBody->operand1;
+				SSAValue* rightOp = ssaAtIndexInBody->operand2;
+;
 				try {
-					SSAValue* renameLeftInst = idChanges.at(ssaAtIndexInBody->operand1);
-					ssaAtIndexInBody->operand1 = renameLeftInst;
-
-					//SSAValue* renameRightInst = idChanges.at(ssaAtIndexInBody->operand2);
-					//ssaAtIndexInBody->operand2 = renameRightInst;
-				} catch (std::out_of_range& oor) {
-
+					std::string leftName = ssaAtIndexInBody->op1Name;
+					std::tuple<SSAValue*, SSAValue*> replaceInfo = idChanges.at(leftName);
+					if (leftOp == std::get<0>(replaceInfo)) {
+						ssaAtIndexInBody->operand1 = std::get<1>(replaceInfo);
+					}
 				}
-				ssaAtIndexInBody = ssaAtIndexInBody->next;
-			}
+				catch (std::out_of_range& oor) {
+					// intentionally left blank
+				}
 
+				try {
+					std::string rightName = ssaAtIndexInBody->op2Name;
+					std::tuple<SSAValue*, SSAValue*> replaceInfo = idChanges.at(rightName);
+					if (rightOp == std::get<0>(replaceInfo)) {
+						ssaAtIndexInBody->operand2 = std::get<1>(replaceInfo);
+					}
+				}
+				catch (std::out_of_range& oor) {
+					// intentionally left blank
+				}
+
+				try {
+					SSAValue* replaceWith = instReplacements.at(ssaAtIndexInBody->operand1);
+					ssaAtIndexInBody->operand1 = replaceWith;
+				} catch (std::out_of_range& oor) {
+					// intentionally left blank
+				}
+				try {
+					SSAValue* replaceWith = instReplacements.at(ssaAtIndexInBody->operand2);
+					ssaAtIndexInBody->operand2 = replaceWith;
+				}
+				catch (std::out_of_range& oor) {
+					// intentionally left blank
+				}
+				SSAValue* iter = ssaAtIndexInBody->prevDomWithOpcode;
+				bool needToEliminate = false;
+				SSAValue* elimWith = nullptr;
+				while (iter != nullptr && !needToEliminate) {
+					if (iter->operand1 == ssaAtIndexInBody->operand1 && iter->operand2 == ssaAtIndexInBody->operand2) {
+						// eliminate
+						needToEliminate = true;
+						elimWith = iter;
+					}
+					iter = iter->prevDomWithOpcode;
+				}
+				if (needToEliminate) {
+					//SSAValue* beforeCurrent = ssaAtIndexInBody->prev;
+					SSAValue* afterCurrent = ssaAtIndexInBody->next;
+					//beforeCurrent->next = afterCurrent;
+					//afterCurrent->prev = beforeCurrent;
+					ssaAtIndexInBody->eliminated = true;
+
+					SSAValue* elimIter = elimWith;
+					while (elimIter->eliminatedBy != nullptr) {
+						elimIter = elimIter->eliminatedBy;
+					}
+
+					instReplacements.insert({ ssaAtIndexInBody, elimIter });
+					ssaAtIndexInBody->eliminatedBy = elimIter;
+					ssaAtIndexInBody = afterCurrent;
+				} else {
+					ssaAtIndexInBody = ssaAtIndexInBody->next;
+				}
+
+			}
+			// now rename operands of phis if needed
+
+			SSAValue* iter = joinBlockHead->next;
+			while (iter != joinBlockTail->next) {
+				std::cout << "join block tail " << joinBlockTail->instCFGRepr() << std::endl;
+				std::cout << "renaming while phis " << iter->instCFGRepr() << std::endl;
+				try {
+					SSAValue* replaceWith = instReplacements.at(iter->operand1);
+					iter->operand1 = replaceWith;
+				}
+				catch (std::out_of_range& oor) {
+					// intentionally left blank
+				}
+				try {
+					SSAValue* replaceWith = instReplacements.at(iter->operand2);
+					iter->operand2 = replaceWith;
+				}
+				catch (std::out_of_range& oor) {
+					// intentionally left blank
+				}
+				iter = iter->next;
+			}
 
 
 
@@ -560,11 +707,15 @@ void Parser::whileStatement() {
 		error("While statement must have 'while'");
 	}
 
+	if (savedJoinBlock != nullptr && savedJoinBlock->joinType != "while") {
 
-
+		ssa->connectFT(followBlock, savedJoinBlock);
+	}
+	ssa->setInWhile(savedInWhile);
 	elseHead = savedElseHead;
 	joinBlockHead = savedJoinBlockHead;
 	phiMap = savedPhiMap;
+	joinBlock = savedJoinBlock;
 
 	decPrintInd();
 
@@ -608,7 +759,7 @@ void Parser::statement() {
 void Parser::statSequence() {
 	startPrintBlock("Statement Sequence");
 
-	ssa.enterScope();
+	ssa->enterScope();
 	statement();
 	while (sym == SEMICOLON) {
 		printItem(getTextForEnum(sym));
@@ -619,7 +770,7 @@ void Parser::statSequence() {
 
 		}
 	}
-	phiMap = ssa.exitScope();
+	phiMap = ssa->exitScope();
 
 
 	decPrintInd();
@@ -631,12 +782,15 @@ void Parser::varDecl() {
 		printItem(getTextForEnum(sym));
 		next();
 		if (sym == IDENT) {
+			ssa->addToVarDecl(getCurrentValue());
 			printItem(getTextForEnum(sym), getCurrentValue());
+
 			next();
 			while (sym == COMMA) {
 				printItem(getTextForEnum(sym));
 				next();
 				if (sym == IDENT) {
+					ssa->addToVarDecl(getCurrentValue());
 					printItem(getTextForEnum(sym), getCurrentValue());
 					next();
 				} else {
@@ -660,6 +814,7 @@ void Parser::varDecl() {
 
 
 void Parser::funcDecl() {
+
 	startPrintBlock("Function Declaration");
 	if (sym == VOID) {
 		printItem(getTextForEnum(sym));
@@ -670,6 +825,8 @@ void Parser::funcDecl() {
 		next();
 		if (sym == IDENT) {
 			printItem(getTextForEnum(sym), getCurrentValue());
+			ssa = new SSA(getCurrentValue());
+			programSSAs.insert({ getCurrentValue(), ssa });
 			next();
 			formalParam();
 			if (sym == SEMICOLON) {
@@ -690,6 +847,7 @@ void Parser::funcDecl() {
 		}
 	}
 	decPrintInd();
+	ssa = programSSAs.at("__main__");
 }
 
 void Parser::formalParam() {
@@ -703,12 +861,18 @@ void Parser::formalParam() {
 		} else {
 			if (sym == IDENT) {
 				printItem(getTextForEnum(sym), getCurrentValue());
+				SSAValue* argVal = ssa->SSACreateArgAssign(getCurrentValue());
+				ssa->addToVarDecl(getCurrentValue());
+				ssa->addSymbol(getCurrentValue(), argVal);
 				next();
 				while (sym == COMMA) {
 					printItem(getTextForEnum(sym));
 					next(); // consume COMMA
 					if (sym == IDENT) {
 						printItem(getTextForEnum(sym), getCurrentValue());
+						SSAValue* argVal = ssa->SSACreateArgAssign(getCurrentValue());
+						ssa->addToVarDecl(getCurrentValue());
+						ssa->addSymbol(getCurrentValue(), argVal);
 						next(); // consume IDENT
 					} else {
 						error("Expected identifier here");
@@ -758,6 +922,7 @@ void Parser::computation() {
 	if (debug) {
 		std::cout << "Computation" << std::endl;
 	}
+
 	if (sym == MAIN) {
 		printItem(getTextForEnum(sym));
 		next();
@@ -798,6 +963,8 @@ void Parser::parse() {
 	if (debug) {
 		std::cout << "Parser is starting..." << std::endl;
 	}
+	ssa = new SSA("__main__");
+	programSSAs.insert({ "__main__", ssa });
 	currentPrintIndent = 0;
 	currPos = 0;
 	sym = tokens[currPos].getType();
@@ -806,24 +973,44 @@ void Parser::parse() {
 }
 
 std::string Parser::outputSSA() {
-	return ssa.outputSSA();
+	return ssa->outputSSA();
 }
 
 void Parser::reset() {
-	ssa.reset();
+	ssa->reset();
 }
 void Parser::printSSA() {
-	std::cout << std::endl;
-	ssa.printSSA();
-	std::cout << std::endl;
-	ssa.printSymTable();
-	std::cout << std::endl;
-	ssa.printConstTable();
-	std::cout << std::endl;
+	std::cout << "All program SSAs" << std::endl;
+	for (auto kv : programSSAs) {
+		ssa = kv.second;
+		std::cout << "// " << kv.first << ": " << std::endl;
+		std::cout << std::endl;
+		ssa->printSSA();
+		std::cout << std::endl;
+		ssa->printSymTable();
+		std::cout << std::endl;
+		ssa->printConstTable();
+		std::cout << std::endl;
+		ssa->printVarDeclList();
+		std::cout << std::endl;
+
+	}
+
+
+
+
 }
 
 
 void Parser::printDotLang() {
-	//ssa.generateDotLang();
-	ssa.gen();
+	//ssa->generateDotLang();
+	std::cout << "digraph prog {" << std::endl;
+	std::cout << "program[label = \"Program\"];" << std::endl;
+	for (auto kv : programSSAs) {
+		ssa = kv.second;
+		ssa->gen();
+		std::cout << "program:s -> " + kv.first + "CONST:n [label=\"\"]" << std::endl;
+
+	}
+	std::cout << "}" << std::endl;
 }

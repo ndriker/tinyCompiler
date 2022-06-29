@@ -32,6 +32,7 @@ enum opcode {
 	read = 20,      // read
 	write = 21,     // write x
 	writeNL = 22,   // write new line
+	argAssign = 23
 };
 
 
@@ -45,6 +46,9 @@ class SSAValue {
         SSAValue *prev, *next;
         SSAValue *inCreationOrder; 
         SSAValue *prevDomWithOpcode; // wtf is this
+		bool eliminated;
+		SSAValue* eliminatedBy;
+		std::string argName;
 
 
 		int bbID;
@@ -63,13 +67,15 @@ class SSAValue {
         void instRepr(); // print representation of each ssa value
 		void instReprWNames();
 		std::string instCFGRepr();
+		std::string elimRepr();
+
 
 
 
     private:
         //hash_map will be implemented, details still needed
         //std::unordered_map<>
-		std::string opcodeEnumStrings[23] = {
+		std::string opcodeEnumStrings[24] = {
 			"NEG",        
 			"ADDOP",        
 			"SUBOP",        
@@ -92,7 +98,8 @@ class SSAValue {
 			"NOP",
 			"read",      
 			"write",     
-			"writeNL"   
+			"writeNL",
+			"argAssign"
 		};
 
 
@@ -112,7 +119,10 @@ class BasicBlock {
 		SSAValue* tail;
 		BasicBlock* fallThrough;
 		BasicBlock* branch;
-
+		bool addToHead;
+		bool headAdded;
+		std::string joinType;
+		std::string funcName;
 };
 
 class BBEdge {
@@ -131,7 +141,7 @@ private:
 
 class SSA {
     public:
-        SSA();
+        SSA(std::string fName);
         void addSSAValue(SSAValue* newSSAVal);
 		void addSSAConst(SSAValue* newSSAVal);
         SSAValue* SSACreate(opcode operation, SSAValue* x, SSAValue* y);
@@ -139,6 +149,7 @@ class SSA {
 		SSAValue* SSACreateWhilePhi(SSAValue* x, SSAValue* y);
         SSAValue* SSACreateConst(int constVal);
 		SSAValue* SSACreateNop();
+		SSAValue* SSACreateArgAssign(std::string argName);
 
 		void updateNop(SSAValue* nopInst);
 		
@@ -158,40 +169,54 @@ class SSA {
         void addConst(int constVal, SSAValue* constSSAVal);
         SSAValue* findConst(int constVal);
 
+
+		// varDeclFunctions
+		void addToVarDecl(std::string varName);
+		bool checkVarDeclList(std::string varName);
 		// inorder functions
 		void addInOrder(SSAValue* newInst);
 		SSAValue* findPrevDomWithOpcode(opcode operation);
 
         // ssa debugging functions
 		std::string outputSSA();
+		void removeElimInsts();
         void printSSA();
 		void printSymTable();
 		void printConstTable();
+		void printVarDeclList();
 		std::string reprBasicBlocks(BasicBlock* head);
+
 
 	    // basic block functions
 		BasicBlock* createContext();
 		BasicBlock* createBlock();
+		void setJoinType(BasicBlock* block, std::string type);
 		void initBlock(BasicBlock* blockToInit);
 		void addInstToBB(SSAValue* inst);
 		void addInstToConstBB(SSAValue* inst);
 		void connectFT(BasicBlock* from, BasicBlock* to);
 		void connectBR(BasicBlock* from, BasicBlock* to);
 		BasicBlock* getContext();
-		void setContext(BasicBlock* ctx);
+		void setContext(BasicBlock* ctx, bool addToHead=false);
 
 		std::string genBBStart(int bbID);
 		std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> genBasicBlocks();
+		
+		bool getInWhile();
+		void setInWhile(bool value);
+		
 		void gen();
 		//void generateDotLang();
 
 		void reset();
+
     private:
-        static int maxID; // current number of SSAValues created
-		static int numConsts;
-		static int maxBlockID;
+        int maxID; // current number of SSAValues created
+		int numConsts;
+		int maxBlockID;
 		static std::unordered_map<tokenType, opcode> brOpConversions;
 
+		bool inWhile;
         SSAValue* instList; // pointer to head of instruction list
         SSAValue* instTail; // pointer to tail of instruction list
         int instListLength;
@@ -207,9 +232,13 @@ class SSA {
 
 		std::vector<BasicBlock*> basicBlocks;
 
+		std::vector<std::string> varDeclList;
+
 		BasicBlock* bbListHead;
 		BasicBlock* constBlock;
 		BasicBlock* context;
+
+		std::string funcName;
 
         
 };

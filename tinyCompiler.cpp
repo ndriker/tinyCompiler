@@ -47,8 +47,8 @@ std::string compile(std::string fName, bool testMode = false) {
 		parser.setTokens(lex.getTokens());
 		parser.setDebug(true);
 		parser.parse();
-		parser.printSSA();
 		parser.printDotLang();
+		parser.printSSA();
 		parser.reset();
 		return "";
 	} else {

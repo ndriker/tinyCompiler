@@ -15,12 +15,13 @@ std::string SSAValue::formatOperand(SSAValue* operand) {
 	return "(" + std::to_string(operand->id) + ")";
 }
 void SSAValue::instRepr() {
-
-	if (op == CONST) {
+	if (op == argAssign) {
+		std::cout << id << ": arg " << argName << std::endl;
+	} else if (op == CONST) {
 		std::cout << id << ": CONST #" << constValue << std::endl;
 	} else if (op == BRA || op == write) {
 		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << std::endl;
-	} else if (op == NOP || op == read) {
+	} else if (op == NOP || op == read || op == writeNL) {
 		std::cout << id << ": " << getTextForEnum(op) << std::endl;
 	} else {
 		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << formatOperand(operand2) << std::endl;
@@ -40,25 +41,44 @@ std::string SSAValue::getNameType() {
 }
 
 void SSAValue::instReprWNames() {
-
-	if (op == CONST) {
+	if (op == argAssign) {
+		std::cout << id << ": arg " << argName << std::endl;
+	} else if (op == CONST) {
 		std::cout << id << ": CONST #" << constValue << getNameType() << std::endl;
 	} else if (op == BRA || op == write) {
 		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << getNameType() << std::endl;
-	} else if (op == NOP || op == read) {
+	} else if (op == NOP || op == read || op == writeNL) {
 		std::cout << id << ": " << getTextForEnum(op) << getNameType() << std::endl;
 	} else {
-		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << formatOperand(operand2) << getNameType() << std::endl;
+		if (prevDomWithOpcode != nullptr) {
+			std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << formatOperand(operand2) << getNameType() << ", " << prevDomWithOpcode->instCFGRepr() << std::endl;
+		} else {
+			std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << formatOperand(operand2) << getNameType() << ", " << "No Dom Inst with Opcode" << std::endl;
+		}
 	}
 }
 
+std::string SSAValue::elimRepr() {
+	return std::to_string(id) + ": \\<eliminated by " +
+		std::to_string(eliminatedBy->id) + ": " +
+		getTextForEnum(eliminatedBy->op) +
+		formatOperand(eliminatedBy->operand1) +
+		formatOperand(eliminatedBy->operand2) + "\\>";
+}
+
+
 std::string SSAValue::instCFGRepr() {
 	std::string output = "";
-	if (op == CONST) {
+
+	if (op == argAssign) {
+		output = std::to_string(id) + ": arg " + argName;
+	} else if (eliminated) {
+		output = elimRepr();
+	} else if (op == CONST) {
 		output = std::to_string(id) + ": CONST #" + std::to_string(constValue);
 	} else if (op == BRA || op == write) {
 		output = std::to_string(id) + ": " + getTextForEnum(op) + formatOperand(operand1);
-	} else if (op == NOP || op == read) {
+	} else if (op == NOP || op == read || op == writeNL) {
 		output = std::to_string(id) + ": " + getTextForEnum(op);
 	} else {
 		output = std::to_string(id) + ": " + getTextForEnum(op) + formatOperand(operand1) + formatOperand(operand2);
@@ -74,9 +94,7 @@ void SSAValue::setOpNames(std::string operand1Name, std::string operand2Name) {
 
 // ssa class
 
-int SSA::maxID = 0;
-int SSA::maxBlockID = 0;
-int SSA::numConsts = 0;
+
 
 std::unordered_map<tokenType, opcode> SSA::brOpConversions = {
 	{NEQ, BEQ},
@@ -93,24 +111,25 @@ opcode SSA::convertBr(tokenType type) {
 
 SSAValue* SSA::SSACreate(opcode operation, SSAValue* x, SSAValue* y) {
 	SSAValue* prevDomWithOpcode = nullptr;
-	//if (operation >= ADDOP && operation <= DIVOP) {
+	SSAValue* elimBy = nullptr;
+	if (operation >= ADDOP && operation <= DIVOP) {
 	//	// these ops can be involved in CSE
 	//	// search in symbol table for dominating inst with same opcode
 	//	// then search up the linked list looking for an inst that has same params
-	//	prevDomWithOpcode = findPrevDomWithOpcode(operation);
+		prevDomWithOpcode = findPrevDomWithOpcode(operation);
 
-	//	SSAValue* iter = prevDomWithOpcode;
-	//	while (iter != nullptr) {
-	//		//std::cout << "SSACreate prevDomWithOpcode" << iter->instCFGRepr() << std::endl;
-	//		if (iter->operand1 == x && iter->operand2 == y) {
+		SSAValue* iter = prevDomWithOpcode;
+		while (iter != nullptr) {
+			std::cout << "SSACreate prevDomWithOpcode" << iter->instCFGRepr() << std::endl;
+			if (!inWhile && iter->operand1 == x && iter->operand2 == y) {
 
-	//			// found common subexpression
-	//			return iter;
-	//		}
-	//		iter = iter->prevDomWithOpcode;
-	//	}
+				// found common subexpression
+				elimBy = iter;
+			}
+			iter = iter->prevDomWithOpcode;
+		}
 
-	//}
+	}
 	SSAValue* result = new SSAValue();
 	result->id = maxID++;
 	result->op = operation;
@@ -119,6 +138,11 @@ SSAValue* SSA::SSACreate(opcode operation, SSAValue* x, SSAValue* y) {
 	result->prevDomWithOpcode = prevDomWithOpcode;
 	addSSAValue(result);
 	addInOrder(result);
+	if (elimBy != nullptr) {
+		result->eliminated = true;
+		result->eliminatedBy = elimBy;
+		return elimBy;
+	}
 	return result;
 
 }
@@ -141,10 +165,21 @@ void SSA::SSACreate(opcode operation, SSAValue* y) {
 	addSSAValue(result);
 }
 
-SSAValue* SSA::SSACreateConst(int constVal) {
+SSAValue* SSA::SSACreateArgAssign(std::string argName) {
+	SSAValue* result = new SSAValue();
+	result->id = maxID++;
+	result->op = argAssign;
+	result->argName = argName;
+	addInOrder(result);
+	addSSAValue(result);
+	return result;
+}
 
+SSAValue* SSA::SSACreateConst(int constVal) {
+	std::cout << "Creating const" << std::endl;
 	SSAValue* val = findConst(constVal);
 	if (val == nullptr) {
+		std::cout << "Val was nullptr" << std::endl;
 		SSAValue* ssaConst = new SSAValue();
 		ssaConst->op = CONST;
 		numConsts += 1;
@@ -191,6 +226,13 @@ SSAValue* SSA::findPrevDomWithOpcode(opcode operation) {
 	}
 	return nullptr;
 }
+void SSA::setInWhile(bool value) {
+	inWhile = value;
+}
+
+bool SSA::getInWhile() {
+	return inWhile;
+}
 
 int SSA::getTailID() {
 	return instTail->id;
@@ -204,12 +246,17 @@ void SSA::setInstTail(SSAValue* newTail) {
 	instTail = newTail;
 }
 
-SSA::SSA() {
+SSA::SSA(std::string fName) {
+	funcName = fName;
+	maxID = 0;
+	numConsts = 0;
+	maxBlockID = 0;
 	instListLength = 0;
 	instTail = new SSAValue();
 	scopeDepth = 0;
 	createContext();
 	constBlock = new BasicBlock();
+	constBlock->funcName = funcName;
 	constBlock->id = -1;
 	//basicBlocks.push_back(context);
 	enterScope(); // built-in functions and computation var decls
@@ -268,28 +315,36 @@ std::unordered_map<std::string, SSAValue*> SSA::exitScope() {
 }
 
 void SSA::addSymbol(std::string name, SSAValue* val) {
-	symTable.back().insert_or_assign(name, val);
-	symTableCopy.back().insert_or_assign(name, val);
-
-
+	if (checkVarDeclList(name)) {
+		symTable.back().insert_or_assign(name, val);
+		symTableCopy.back().insert_or_assign(name, val);
+	} else {
+		std::cout << "Parser Error: Var Decl not found for " << name << std::endl;
+	}
 }
 
 SSAValue* SSA::findSymbol(std::string name) {
-	for (int i = symTable.size() - 1; i >= 0; i--) {
-		std::unordered_map<std::string, SSAValue*> scopeMap = symTable[i];
+	if (checkVarDeclList(name)) {
+		for (int i = symTable.size() - 1; i >= 0; i--) {
+			std::unordered_map<std::string, SSAValue*> scopeMap = symTable[i];
 
-		try {
-			SSAValue* val = scopeMap.at(name);
-			return val;
+			try {
+				SSAValue* val = scopeMap.at(name);
+				return val;
+			}
+			catch (std::out_of_range& oor) {
+				// intentionally left blank
+			}
 		}
-		catch (std::out_of_range& oor) {
-			// intentionally left blank
-		}
+		// if variable is not defined when attempting access
+		//	set var value to 0
+		SSAValue* constZero = SSACreateConst(0);
+		return constZero;
+	} else {
+		std::cout << "Parser Error: Var Decl not found for " << name << std::endl;
+		return nullptr;
 	}
-	// if variable is not defined when attempting access
-	//	set var value to 0
-	SSAValue* constZero = SSACreateConst(0);
-	return constZero;
+
 
 }
 
@@ -301,6 +356,12 @@ void SSA::addConst(int constVal, SSAValue* constSSAVal) {
 }
 
 SSAValue* SSA::findConst(int constVal) {
+	std::cout << "Const Table" << std::endl;
+	for (auto kv : constTable) {
+		std::cout << kv.first << " " << kv.second->instCFGRepr() << std::endl;
+	}
+	std::cout << "end of const table" << std::endl;
+	std::cout << "val is " << constVal << std::endl;
 	try {
 		SSAValue* val = constTable.at(constVal);
 		return val;
@@ -310,8 +371,40 @@ SSAValue* SSA::findConst(int constVal) {
 
 }
 
+
+// var decl functions
+void SSA::addToVarDecl(std::string varName) {
+	varDeclList.push_back(varName);
+}
+
+bool SSA::checkVarDeclList(std::string varName) {
+	for (std::string var : varDeclList) {
+		if (var == varName) {
+			return true;
+		}
+	}
+	return false;
+}
 // ssa debugging functions
+
+void SSA::removeElimInsts() {
+	SSAValue* current = instList;
+	while (current != nullptr) {
+		if (current->eliminated) {
+			SSAValue* beforeCurrent = current->prev;
+			SSAValue* afterCurrent = current->next;
+
+			beforeCurrent->next = afterCurrent;
+			if (afterCurrent != nullptr) {
+
+				afterCurrent->prev = beforeCurrent;
+			}
+		}
+		current = current->next;
+	}
+}
 std::string SSA::outputSSA() {
+	removeElimInsts();
 	std::string output = "";
 	SSAValue* current = instList;
 	while (current != nullptr) {
@@ -323,10 +416,13 @@ std::string SSA::outputSSA() {
 
 
 void SSA::printSSA() {
+	removeElimInsts();
+
 	SSAValue* current = instList;
 	while (current != nullptr) {
 		//current->instRepr();
 		current->instReprWNames();
+
 		current = current->next;
 	}
 }
@@ -345,6 +441,13 @@ void SSA::printConstTable() {
 	std::cout << "Consts       ID" << std::endl;
 	for (auto kv : constTable) {
 		std::cout << kv.first << "            (" << kv.second->id << ")" << std::endl;
+	}
+}
+
+void SSA::printVarDeclList() {
+	std::cout << "Var Declarations" << std::endl;
+	for (std::string name : varDeclList) {
+		std::cout << name << std::endl;
 	}
 }
 
@@ -370,6 +473,7 @@ std::string SSA::reprBasicBlocks(BasicBlock* head) {
 	
 
 }
+
 
 //std::string SSA::genBBStart(int bbID) {
 //	std::string bbIDStr = std::to_string(bbID);
@@ -514,7 +618,6 @@ void SSA::gen() {
 	//std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> info = genBasicBlocks();
 	//std::vector<BasicBlock*> basicBlocks = std::get<0>(info);
 	//std::vector<BBEdge*> bbEdges = std::get<1>(info);
-	std::cout << "digraph prog {" << std::endl;
 
 	std::cout << reprBasicBlocks(bbListHead) << std::endl;
 	//for (BasicBlock* bb: basicBlocks) {
@@ -524,8 +627,6 @@ void SSA::gen() {
 	//for (BBEdge* edge : bbEdges) {
 	//	std::cout << edge->bbEdgeRepr() << std::endl;
 	//}
-
-	std::cout << "}" << std::endl;
 }
 
 BasicBlock* SSA::createContext() {
@@ -534,6 +635,7 @@ BasicBlock* SSA::createContext() {
 	if (bbListHead == nullptr) {
 		bbListHead = newBlock;
 	}
+	newBlock->funcName = funcName;
 	context = newBlock;
 	basicBlocks.push_back(context);
 	return newBlock;
@@ -544,7 +646,18 @@ void SSA::addInstToBB(SSAValue* inst) {
 		context->head = inst;
 	}
 
-	context->tail = inst;
+	if (context->addToHead) {
+		if (context->head->op == CMP) {
+			context->head = inst;
+			context->addToHead = false;
+			context->headAdded = true;
+		}
+	} else {
+		if (!context->headAdded) {
+			context->tail = inst;
+
+		}
+	}
 }
 
 void SSA::addInstToConstBB(SSAValue* inst) {
@@ -579,12 +692,19 @@ BasicBlock* SSA::getContext() {
 	return context;
 }
 
-void SSA::setContext(BasicBlock* ctx) {
+void SSA::setContext(BasicBlock* ctx, bool addToHead) {
 	context = ctx;
+	context->addToHead = addToHead;
+	context->headAdded = false;
 }
 
 BasicBlock* SSA::createBlock() {
-	return new BasicBlock();
+	BasicBlock* bb = new BasicBlock();
+	bb->funcName = funcName;
+	return bb;
+}
+void SSA::setJoinType(BasicBlock* block, std::string type) {
+	block->joinType = type;
 }
 
 void SSA::initBlock(BasicBlock* blockToInit) {
@@ -777,6 +897,9 @@ std::string BasicBlock::bbRepr() {
 	SSAValue* current = head;
 
 	SSAValue* stopAt;
+	if (head == nullptr) {
+		std::cout << "BIG FUCK" << std::endl;
+	}
 	if (tail == nullptr) {
 		stopAt= head;
 	} else {
@@ -786,8 +909,8 @@ std::string BasicBlock::bbRepr() {
 	if (id == -1) {
 		bbIDStr = "CONST";
 	}
-	std::string bbString = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
-	while (current != stopAt) {
+	std::string bbString = funcName + bbIDStr + "[shape=record, label=\" < b > " + funcName + bbIDStr + " | {";
+	while (current!= nullptr && current != stopAt) {
 		bbString = bbString + current->instCFGRepr() + "|";
 		current = current->next;
 	}
@@ -805,13 +928,13 @@ std::string BasicBlock::bbRepr() {
 		if (tail != nullptr && tail->op == BRA) {
 			type = "BR";
 		}
-		std::string out = "bb" + fromIDStr + ":s -> bb" + toIDStr + ":n [label=\"" + type + "\"];";
+		std::string out = funcName + fromIDStr + ":s -> " + funcName + toIDStr + ":n [label=\"" + type + "\"];";
 		bbString += "\n" + out;
 	}
 	if (branch != nullptr) {
 		std::string fromIDStr = std::to_string(id);
 		std::string toIDStr = std::to_string(branch->id);
-		std::string out = "bb" + fromIDStr + ":s -> bb" + toIDStr + ":n [label=\"" + "BR" + "\"];";
+		std::string out = funcName + fromIDStr + ":s -> " + funcName + toIDStr + ":n [label=\"" + "BR" + "\"];";
 		bbString += "\n" + out;
 	}
 	return bbString;
@@ -860,5 +983,5 @@ void SSA::reset() {
 
 	inOrder = std::vector<std::vector<SSAValue*>>();
 
-	constTable = std::unordered_map<int, SSAValue*>();
+	//constTable = std::unordered_map<int, SSAValue*>();
 }
