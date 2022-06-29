@@ -287,14 +287,18 @@ void Parser::assignment() {
 
 SSAValue* Parser::funcCall() {
 	startPrintBlock("Function Call");
-
+	bool isVoid = false;
+	std::vector<std::string> formalParams;
+	std::vector<SSAValue*> argVals;
 	if (sym == CALL) {
 		printItem(getTextForEnum(sym));
 		next();
 		if (sym == IDENT) {
 			printItem(getTextForEnum(sym), getCurrentValue());
 			std::string ident = getCurrentValue();
-
+			funcDescriptor funcToCall = funcDescriptors.at(ident);
+			isVoid = funcToCall.isVoid;
+			formalParams = funcToCall.formalParams;
 			next();
 			
 
@@ -314,11 +318,14 @@ SSAValue* Parser::funcCall() {
 				} else {
 					std::tuple<SSAValue*, std::string> resultTuple = expression();
 					SSAValue* result = std::get<0>(resultTuple);
+					argVals.push_back(result);
 
 					while (sym == COMMA) {
 						printItem(getTextForEnum(sym));
 						next(); // consume comma
-						expression();
+						std::tuple<SSAValue*, std::string> resultTuple = expression();
+						result = std::get<0>(resultTuple);
+						argVals.push_back(result);
 
 					}
 					if (sym == R_PAREN) {
@@ -333,12 +340,23 @@ SSAValue* Parser::funcCall() {
 					}
 				}
 			}
-			if (ident == "InputNum") {
-				return ssa->SSACreate(read, nullptr, nullptr);
-			} else if (ident == "OutputNewLine") {
-				ssa->SSACreate(writeNL, nullptr, nullptr);
+			if (isVoid) {
+				if (ident == "OutputNewLine") {
+					ssa->SSACreate(writeNL, nullptr, nullptr);
+				} else if (ident == "OutputNum") {
+					ssa->SSACreate(write, argVals.at(0));
+				} else {
+					ssa->SSACreateCall(ident, argVals, formalParams);
+				}
 				return nullptr;
+			} else {
+				if (ident == "InputNum") {
+					return ssa->SSACreate(read, nullptr, nullptr);
+				} else {
+					return ssa->SSACreateCall(ident, argVals, formalParams);
+				}
 			}
+
 		} else {
 			error("Call must have identifier");
 		}
@@ -377,6 +395,7 @@ void Parser::ifStatement() {
 
 			phiMap = std::unordered_map<std::string, SSAValue*>();
 			thenBlock = ssa->createContext();
+			thenBlock->dom = splitBlock;
 			statSequence();
 			ssa->connectFT(splitBlock, thenBlock);
 			std::unordered_map<std::string, SSAValue*> thenPhiMap = phiMap;
@@ -391,6 +410,7 @@ void Parser::ifStatement() {
 				ssa->SSACreate(BRA, joinBlockHead);
 
 				BasicBlock* elseBlock = ssa->createContext();
+				elseBlock->dom = splitBlock;
 				ssa->updateNop(elseHead);
 				printItem(getTextForEnum(sym));
 				next();
@@ -406,6 +426,7 @@ void Parser::ifStatement() {
 				ssa->initBlock(joinBlock);
 				ssa->setContext(joinBlock);
 				ssa->updateNop(joinBlockHead);
+				joinBlock->dom = splitBlock;
 
 
 				//joinBlock = ssa->createContext();
@@ -438,6 +459,7 @@ void Parser::ifStatement() {
 				//		just fall through
 				ssa->initBlock(joinBlock);
 				ssa->setContext(joinBlock);
+				joinBlock->dom = splitBlock;
 				
 				
 				//joinBlock = ssa->createContext();
@@ -501,6 +523,7 @@ void Parser::whileStatement() {
 		next();
 		SSAValue* branchInst = relation();
 		BasicBlock* whileBodyBlock = ssa->createContext();
+		whileBodyBlock->dom = joinBlock;
 		joinBlockHead = ssa->SSACreateNop();
 
 		if (sym == DO) {
@@ -594,6 +617,7 @@ void Parser::whileStatement() {
 
 			followBlock = ssa->createContext(); // also does setContext
 			ssa->connectBR(joinBlock, followBlock);
+			followBlock->dom = joinBlock;
 			ssa->updateNop(elseHead);
 
 			SSAValue* ssaAtIndexInBody = whileBodyHead;
@@ -728,7 +752,9 @@ void Parser::returnStatement() {
 		next();
 		if ((sym == IDENT) || (sym == NUMBER) ||
 			(sym == L_PAREN) || (sym == CALL)) {
-			expression();
+			std::tuple<SSAValue*, std::string> tup = expression();
+			SSAValue* left = std::get<0>(tup);
+			ssa->SSACreate(ret, left);
 		}
 
 	} else {
@@ -816,7 +842,9 @@ void Parser::varDecl() {
 void Parser::funcDecl() {
 
 	startPrintBlock("Function Declaration");
+	bool isVoid = false;
 	if (sym == VOID) {
+		isVoid = true;
 		printItem(getTextForEnum(sym));
 		next();
 	}
@@ -824,11 +852,20 @@ void Parser::funcDecl() {
 		printItem(getTextForEnum(sym));
 		next();
 		if (sym == IDENT) {
+			std::string ident = getCurrentValue();
 			printItem(getTextForEnum(sym), getCurrentValue());
-			ssa = new SSA(getCurrentValue());
-			programSSAs.insert({ getCurrentValue(), ssa });
+			ssa = new SSA(ident);
+			programSSAs.insert({ ident, ssa });
 			next();
-			formalParam();
+			std::vector<std::string> params = formalParam();
+			funcDescriptor newFunc = { isVoid, params };
+			funcDescriptors.insert({ ident, newFunc });
+
+
+			std::cout << "before next() " << std::endl;
+			printItem(getTextForEnum(sym));
+			printItem(getTextForEnum(sym));
+
 			if (sym == SEMICOLON) {
 				printItem(getTextForEnum(sym));
 				next();
@@ -850,8 +887,10 @@ void Parser::funcDecl() {
 	ssa = programSSAs.at("__main__");
 }
 
-void Parser::formalParam() {
+std::vector<std::string> Parser::formalParam() {
 	startPrintBlock("Formal Parameters");
+	std::cout << "sym is in fp " << getTextForEnum(sym) << std::endl;
+	std::vector<std::string> formalParams;
 	if (sym == L_PAREN) {
 		printItem(getTextForEnum(sym));
 		next();
@@ -864,6 +903,7 @@ void Parser::formalParam() {
 				SSAValue* argVal = ssa->SSACreateArgAssign(getCurrentValue());
 				ssa->addToVarDecl(getCurrentValue());
 				ssa->addSymbol(getCurrentValue(), argVal);
+				formalParams.push_back(getCurrentValue());
 				next();
 				while (sym == COMMA) {
 					printItem(getTextForEnum(sym));
@@ -873,6 +913,7 @@ void Parser::formalParam() {
 						SSAValue* argVal = ssa->SSACreateArgAssign(getCurrentValue());
 						ssa->addToVarDecl(getCurrentValue());
 						ssa->addSymbol(getCurrentValue(), argVal);
+						formalParams.push_back(getCurrentValue());
 						next(); // consume IDENT
 					} else {
 						error("Expected identifier here");
@@ -892,6 +933,7 @@ void Parser::formalParam() {
 		error("Formal params must begin with '('");
 	}
 	decPrintInd();
+	return formalParams;
 }
 
 void Parser::funcBody() {
@@ -965,6 +1007,16 @@ void Parser::parse() {
 	}
 	ssa = new SSA("__main__");
 	programSSAs.insert({ "__main__", ssa });
+	funcDescriptor read = { false, std::vector<std::string>() };
+	std::vector<std::string> writeParams;
+	writeParams.push_back("toWrite");
+	funcDescriptor write = { true, writeParams };
+	funcDescriptor writeNL = { true, std::vector<std::string>() };
+
+	funcDescriptors.insert({ "InputNum", read});
+	funcDescriptors.insert({ "OutputNum", write });
+	funcDescriptors.insert({ "OutputNewLine", writeNL });
+
 	currentPrintIndent = 0;
 	currPos = 0;
 	sym = tokens[currPos].getType();

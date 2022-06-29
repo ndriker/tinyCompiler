@@ -27,12 +27,14 @@ enum opcode {
 	BLT = 15,       // branch lt x y
 	BGE = 16,       // branch gte x y
 	BGT = 17,       // branch gt x y
-    CONST = 18,     // constant
+	CONST = 18,     // constant
 	NOP = 19,		// no operation
 	read = 20,      // read
 	write = 21,     // write x
 	writeNL = 22,   // write new line
-	argAssign = 23
+	argAssign = 23,
+	call = 24,
+	ret = 25
 };
 
 
@@ -49,6 +51,9 @@ class SSAValue {
 		bool eliminated;
 		SSAValue* eliminatedBy;
 		std::string argName;
+		std::vector<SSAValue*> callArgs;
+		std::vector<std::string> formalParams;
+
 
 
 		int bbID;
@@ -63,7 +68,7 @@ class SSAValue {
 		std::string getType();
 		std::string getNameType();
 
-
+		std::string callRepr();
         void instRepr(); // print representation of each ssa value
 		void instReprWNames();
 		std::string instCFGRepr();
@@ -75,7 +80,7 @@ class SSAValue {
     private:
         //hash_map will be implemented, details still needed
         //std::unordered_map<>
-		std::string opcodeEnumStrings[24] = {
+		std::string opcodeEnumStrings[26] = {
 			"NEG",        
 			"ADDOP",        
 			"SUBOP",        
@@ -99,7 +104,9 @@ class SSAValue {
 			"read",      
 			"write",     
 			"writeNL",
-			"argAssign"
+			"argAssign",
+			"call",
+			"return"
 		};
 
 
@@ -123,6 +130,7 @@ class BasicBlock {
 		bool headAdded;
 		std::string joinType;
 		std::string funcName;
+		BasicBlock* dom;
 };
 
 class BBEdge {
@@ -150,6 +158,8 @@ class SSA {
         SSAValue* SSACreateConst(int constVal);
 		SSAValue* SSACreateNop();
 		SSAValue* SSACreateArgAssign(std::string argName);
+		SSAValue* SSACreateCall(std::string funcName, std::vector<SSAValue*> cArgs, std::vector<std::string> fParams);
+
 
 		void updateNop(SSAValue* nopInst);
 		

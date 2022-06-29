@@ -6,7 +6,10 @@
 #include "token.h"
 #include "ssa.h"
 
-
+typedef struct {
+	bool isVoid;
+	std::vector<std::string> formalParams;
+} funcDescriptor;
 
 class Parser {
 	public:
@@ -33,7 +36,7 @@ class Parser {
 
 		void varDecl();
 		void funcDecl();
-		void formalParam();
+		std::vector<std::string> formalParam();
 		void funcBody();
 		void computation();
 
@@ -52,6 +55,7 @@ class Parser {
 		int currentPrintIndent;
 		SSA* ssa; // current ssa that is in context
 		std::unordered_map<std::string, SSA*> programSSAs;
+		std::unordered_map<std::string, funcDescriptor> funcDescriptors;
 		std::unordered_map<int, SSAValue*>* constTable;
 		BasicBlock* constBlock;
 

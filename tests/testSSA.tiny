@@ -1,31 +1,58 @@
 main 
-    var a, b, c, d;
-    void function printSum(a, b);
-        var c;
+
+var alpha,beta,gamma;
+var v0, v1, v2;
+
+function f1 ( arg0, arg1, arg2 );
+    var fvar0;
+    var fvar1;
     {
-        let c <- a + b;
-        call OutputNum(c);
+        if arg0 > 0
+        then
+            let fvar0 <- arg1 / 2 + arg2;
+        else
+            let fvar0 <- 0;
+        fi;
+        return fvar0;
     };
-    void function printDiv(a, b);
+
+{
+    let v0 <- 5;
+    let v1 <- 1;
+    while v0 > 0
+    do
+        let v0 <- v0 - 1;
+        let v1 <- v1 * 2;
+    od;
+    call OutputNum(call f1(1,v1,1));
+}.
+
+/*
+
+main 
+    var a, b;
+    function calculate(a, b, op);
         var c;
     {
-        let c <- a / b;
+        if op == 1 then
+            let c <- a + b;
+        else
+            let c <- a - b;
+        fi;
+        return c;
+    };
+    void function printCalc(a, b, op);
+        var c;
+    {
+        let c <- call calculate(a, b, op);
         call OutputNum(c);
+        call OutputNewLine();
     };
 {
-    let c <- 1 + 2;
-    let d <- 3;
+
+    let a <- call InputNum();
+    let b <- call InputNum();
+    call printCalc(a, b, 1);
 
 }.
-/*
-// printSum
--2: CONST #2
--1: CONST #1
-0: ADDOP (-1) (-2)
-1: write (0)
-
-// __main__
-2: read
-3: read
-4 call printSum
 */

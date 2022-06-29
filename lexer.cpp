@@ -125,7 +125,7 @@ void Lexer::tokenize() {
 							std::string nextStr(1, nextEl);
 							const char* nextCh = nextStr.c_str();
 
-							if (!isLetter(nextCh)) {
+							if (!isAlphanum(nextCh)) {
 								// TODO add keyword checks here!!
 								
 								//if (isKeyword(accumulator)) {

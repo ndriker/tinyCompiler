@@ -14,12 +14,26 @@ std::string SSAValue::getTextForEnum(int enumVal) {
 std::string SSAValue::formatOperand(SSAValue* operand) {
 	return "(" + std::to_string(operand->id) + ")";
 }
+
+std::string SSAValue::callRepr() {
+	std::string output = std::to_string(id) + ": call " + argName + "(";
+	for (int i = 0; i < formalParams.size(); i++) {
+		output += formalParams.at(i) + " : (" + std::to_string(callArgs.at(i)->id) + "), ";
+	}
+	output.pop_back();
+	output.pop_back();
+	output += ")";
+	return output;
+}
+
 void SSAValue::instRepr() {
-	if (op == argAssign) {
+	if (op == call) {
+		std::cout << callRepr() << std::endl;
+	} else if (op == argAssign) {
 		std::cout << id << ": arg " << argName << std::endl;
 	} else if (op == CONST) {
 		std::cout << id << ": CONST #" << constValue << std::endl;
-	} else if (op == BRA || op == write) {
+	} else if (op == BRA || op == write || op == ret) {
 		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << std::endl;
 	} else if (op == NOP || op == read || op == writeNL) {
 		std::cout << id << ": " << getTextForEnum(op) << std::endl;
@@ -41,11 +55,13 @@ std::string SSAValue::getNameType() {
 }
 
 void SSAValue::instReprWNames() {
-	if (op == argAssign) {
+	if (op == call) {
+		std::cout << callRepr() << std::endl;
+	} else if (op == argAssign) {
 		std::cout << id << ": arg " << argName << std::endl;
 	} else if (op == CONST) {
 		std::cout << id << ": CONST #" << constValue << getNameType() << std::endl;
-	} else if (op == BRA || op == write) {
+	} else if (op == BRA || op == write || op == ret) {
 		std::cout << id << ": " << getTextForEnum(op) << formatOperand(operand1) << getNameType() << std::endl;
 	} else if (op == NOP || op == read || op == writeNL) {
 		std::cout << id << ": " << getTextForEnum(op) << getNameType() << std::endl;
@@ -69,14 +85,15 @@ std::string SSAValue::elimRepr() {
 
 std::string SSAValue::instCFGRepr() {
 	std::string output = "";
-
-	if (op == argAssign) {
+	if (op == call) {
+		output = callRepr();
+	} else if (op == argAssign) {
 		output = std::to_string(id) + ": arg " + argName;
 	} else if (eliminated) {
 		output = elimRepr();
 	} else if (op == CONST) {
 		output = std::to_string(id) + ": CONST #" + std::to_string(constValue);
-	} else if (op == BRA || op == write) {
+	} else if (op == BRA || op == write || op == ret) {
 		output = std::to_string(id) + ": " + getTextForEnum(op) + formatOperand(operand1);
 	} else if (op == NOP || op == read || op == writeNL) {
 		output = std::to_string(id) + ": " + getTextForEnum(op);
@@ -170,6 +187,18 @@ SSAValue* SSA::SSACreateArgAssign(std::string argName) {
 	result->id = maxID++;
 	result->op = argAssign;
 	result->argName = argName;
+	addInOrder(result);
+	addSSAValue(result);
+	return result;
+}
+
+SSAValue* SSA::SSACreateCall(std::string funcName, std::vector<SSAValue*> cArgs, std::vector<std::string> fParams) {
+	SSAValue* result = new SSAValue();
+	result->id = maxID++;
+	result->op = call;
+	result->argName = funcName;
+	result->callArgs = cArgs;
+	result->formalParams = fParams;
 	addInOrder(result);
 	addSSAValue(result);
 	return result;
@@ -935,6 +964,12 @@ std::string BasicBlock::bbRepr() {
 		std::string fromIDStr = std::to_string(id);
 		std::string toIDStr = std::to_string(branch->id);
 		std::string out = funcName + fromIDStr + ":s -> " + funcName + toIDStr + ":n [label=\"" + "BR" + "\"];";
+		bbString += "\n" + out;
+	}
+	if (dom != nullptr) {
+		std::string toIDStr = std::to_string(id);
+		std::string fromIDStr = std::to_string(dom->id);
+		std::string out = funcName + fromIDStr + ":b ->" + funcName + toIDStr + ":b [color=blue, style=dotted, label=\"dom\"] ";
 		bbString += "\n" + out;
 	}
 	return bbString;
