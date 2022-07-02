@@ -331,10 +331,10 @@ SSAValue* Parser::funcCall() {
 					if (sym == R_PAREN) {
 						printItem(getTextForEnum(sym));
 						next();
-						if (ident == "OutputNum") {
+		/*				if (ident == "OutputNum") {
 							ssa->SSACreate(write, result);
 							return nullptr;
-						}
+						}*/
 					} else {
 						error("Mismatched Parentheses");
 					}
@@ -342,11 +342,15 @@ SSAValue* Parser::funcCall() {
 			}
 			if (isVoid) {
 				if (ident == "OutputNewLine") {
-					ssa->SSACreate(writeNL, nullptr, nullptr);
+					SSAValue* callRes = ssa->SSACreate(writeNL, nullptr, nullptr);
+					callRes->isVoidCall = true;
 				} else if (ident == "OutputNum") {
-					ssa->SSACreate(write, argVals.at(0));
+					SSAValue* callRes = ssa->SSACreate(write, argVals.at(0));
+					callRes->isVoidCall = true;
+					std::cout << "JUST SET isVoidCall to TRUE for write" << std::endl;
 				} else {
-					ssa->SSACreateCall(ident, argVals, formalParams);
+					SSAValue* callRes = ssa->SSACreateCall(ident, argVals, formalParams);
+					callRes->isVoidCall = true;
 				}
 				return nullptr;
 			} else {
@@ -384,6 +388,7 @@ void Parser::ifStatement() {
 		next();
 		relation();
 		BasicBlock* splitBlock = ssa->getContext();
+		splitBlock->splitType = "if";
 		// remember split block
 		// create fall through block
 		// connect split to fall through block
@@ -417,6 +422,7 @@ void Parser::ifStatement() {
 
 				phiMap = std::unordered_map<std::string, SSAValue*>();
 				
+				joinBlock->ifThenJoinBlock = true;
 				statSequence();
 
 				ssa->connectBR(splitBlock, elseBlock);
@@ -427,7 +433,11 @@ void Parser::ifStatement() {
 				ssa->setContext(joinBlock);
 				ssa->updateNop(joinBlockHead);
 				joinBlock->dom = splitBlock;
+			
+				//if (savedJoinBlock != nullptr) {
+				//	savedJoinBlock->ifThenJoinBlock = true;
 
+				//}
 
 				//joinBlock = ssa->createContext();
 				ssa->connectBR(thenBlock, joinBlock);
@@ -460,12 +470,16 @@ void Parser::ifStatement() {
 				ssa->initBlock(joinBlock);
 				ssa->setContext(joinBlock);
 				joinBlock->dom = splitBlock;
+				joinBlock->ifThenJoinBlock = false;
 				
 				
 				//joinBlock = ssa->createContext();
 				ssa->updateNop(elseHead);
 				ssa->connectFT(thenBlock, joinBlock);
 				ssa->connectBR(splitBlock, ssa->getContext());
+				ssa->getContext()->alreadyConnected = true;
+				ssa->getContext()->alreadyConnectedBranch = true;
+
 				for (auto kv : thenPhiMap) {
 					SSAValue* prevOccur = ssa->findSymbol(kv.first);
 					ssa->SSACreate(PHI, kv.second, prevOccur);
@@ -493,7 +507,23 @@ void Parser::ifStatement() {
 	//	ssa->connectFT(joinBlock, savedJoinBlock);
 	//}
 	if (savedJoinBlock != nullptr && savedJoinBlock->joinType != "while") {
-		ssa->connectFT(joinBlock, savedJoinBlock);
+		if (savedJoinBlock->ifThenJoinBlock == true) {
+			// outer conditional is if then else
+			BasicBlock* prevFTBlock = savedJoinBlock->fallThroughFrom;
+			savedJoinBlock->fallThroughFrom = nullptr;
+			if (prevFTBlock != nullptr) {
+				prevFTBlock->fallThrough = nullptr;
+
+			}
+			ssa->connectBR(prevFTBlock, savedJoinBlock);
+			ssa->connectFT(joinBlock, savedJoinBlock);
+
+		} else {
+			// outer condition is if then
+			std::cout << "outer condition is just if then " << ssa->getContext()->getID() << std::endl;
+			ssa->connectFT(joinBlock, savedJoinBlock);
+			savedJoinBlock->alreadyConnected = true;
+		}
 	}
 
 	elseHead = savedElseHead;
@@ -546,7 +576,9 @@ void Parser::whileStatement() {
 			//	
 			std::unordered_map<std::string, SSAValue*> whilePhiMap = phiMap; // scope symbol table of while body
 			ssa->connectFT(joinBlock, whileBodyBlock);
-			ssa->connectBR(ssa->getContext(), joinBlock);
+			//ssa->connectBR(ssa->getContext(), joinBlock);
+			ssa->connectLoop(ssa->getContext(), joinBlock);
+			
 			ssa->setContext(joinBlock, true);
 			ssa->updateNop(joinBlockHead);
 			std::cout << joinBlockHead->instCFGRepr() << std::endl;
@@ -731,9 +763,28 @@ void Parser::whileStatement() {
 		error("While statement must have 'while'");
 	}
 
-	if (savedJoinBlock != nullptr && savedJoinBlock->joinType != "while") {
+	//if (savedJoinBlock != nullptr && savedJoinBlock->joinType != "while") {
 
-		ssa->connectFT(followBlock, savedJoinBlock);
+	//	ssa->connectFT(followBlock, savedJoinBlock);
+	//}
+
+	if (savedJoinBlock != nullptr && savedJoinBlock->joinType != "while") {
+		if (savedJoinBlock->ifThenJoinBlock == true) {
+			// outer conditional is if then else
+			BasicBlock* prevFTBlock = savedJoinBlock->fallThroughFrom;
+			savedJoinBlock->fallThroughFrom = nullptr;
+			if (prevFTBlock != nullptr) {
+				prevFTBlock->fallThrough = nullptr;
+			}
+			ssa->connectBR(prevFTBlock, savedJoinBlock);
+			ssa->connectFT(followBlock, savedJoinBlock);
+
+		} else {
+			// outer condition is if then
+			std::cout << "outer condition is just if then " << ssa->getContext()->getID() << std::endl;
+			ssa->connectFT(followBlock, savedJoinBlock);
+			savedJoinBlock->alreadyConnected = true;
+		}
 	}
 	ssa->setInWhile(savedInWhile);
 	elseHead = savedElseHead;
@@ -1045,7 +1096,11 @@ void Parser::printSSA() {
 		std::cout << std::endl;
 		ssa->printVarDeclList();
 		std::cout << std::endl;
-
+		//ssa->generateLiveRanges();
+		std::cout << "Basic Block Traversal: " << std::endl;
+		ssa->traverseBasicBlocks(ssa->getBBTail());
+		ssa->printLiveRanges();
+		std::cout << std::endl;
 	}
 
 
@@ -1058,6 +1113,7 @@ void Parser::printDotLang() {
 	//ssa->generateDotLang();
 	std::cout << "digraph prog {" << std::endl;
 	std::cout << "program[label = \"Program\"];" << std::endl;
+	ssa->correctBasicBlockIssues();
 	for (auto kv : programSSAs) {
 		ssa = kv.second;
 		ssa->gen();

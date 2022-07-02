@@ -3,6 +3,7 @@
 
 #include "token.h"
 #include <unordered_map>
+#include <set>
 #include <tuple>
 
 // create enum for opcodes
@@ -54,10 +55,13 @@ class SSAValue {
 		std::vector<SSAValue*> callArgs;
 		std::vector<std::string> formalParams;
 
+		bool isVoidCall;
 
 
 		int bbID;
 		bool firstInstOfBB;
+
+		bool deadCode;
 
 		void setOpNames(std::string operand1Name, std::string operand2Name);
 
@@ -124,26 +128,33 @@ class BasicBlock {
 		int id;
 		SSAValue* head;
 		SSAValue* tail;
+
+		BasicBlock* loopBackFrom;
+		BasicBlock* fallThroughFrom;
+		BasicBlock* branchFrom;
+
+		BasicBlock* loop;
+
 		BasicBlock* fallThrough;
 		BasicBlock* branch;
 		bool addToHead;
 		bool headAdded;
 		std::string joinType;
+		std::string splitType;
 		std::string funcName;
 		BasicBlock* dom;
-};
+		bool visited;
+		bool ifThenJoinBlock;
+		bool alreadyConnectedBranch;
+		bool alreadyConnectedFT;
+		bool alreadyConnected;
+		int numVisits;
 
-class BBEdge {
-public:
-	BBEdge(BasicBlock* fromBlock, BasicBlock* toBlock, std::string edgeType);
-	BasicBlock* getFrom();
-	BasicBlock* getTo();
-	std::string getType();
-	std::string bbEdgeRepr();
-private:
-	BasicBlock* from;
-	BasicBlock* to;
-	std::string type;
+		void unionLiveRanges(BasicBlock* toUnionFrom, std::string edgeType);
+
+		std::set<SSAValue*> liveRanges;
+		std::vector<SSAValue*> phis;
+
 };
 
 
@@ -153,7 +164,7 @@ class SSA {
         void addSSAValue(SSAValue* newSSAVal);
 		void addSSAConst(SSAValue* newSSAVal);
         SSAValue* SSACreate(opcode operation, SSAValue* x, SSAValue* y);
-		void SSACreate(opcode operation, SSAValue* y);
+		SSAValue* SSACreate(opcode operation, SSAValue* y);
 		SSAValue* SSACreateWhilePhi(SSAValue* x, SSAValue* y);
         SSAValue* SSACreateConst(int constVal);
 		SSAValue* SSACreateNop();
@@ -206,11 +217,20 @@ class SSA {
 		void addInstToConstBB(SSAValue* inst);
 		void connectFT(BasicBlock* from, BasicBlock* to);
 		void connectBR(BasicBlock* from, BasicBlock* to);
+		void connectLoop(BasicBlock* from, BasicBlock* to);
+		BasicBlock* findBBWithID(int id);
+
+
 		BasicBlock* getContext();
 		void setContext(BasicBlock* ctx, bool addToHead=false);
 
+		void correctBasicBlockIssues();
+
+		void traverseBasicBlocks(BasicBlock* startBlock);
+		BasicBlock* getBBListHead();
+		BasicBlock* getBBTail();
+
 		std::string genBBStart(int bbID);
-		std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> genBasicBlocks();
 		
 		bool getInWhile();
 		void setInWhile(bool value);
@@ -219,6 +239,12 @@ class SSA {
 		//void generateDotLang();
 
 		void reset();
+		
+		void checkOperands(SSAValue* currentInst);
+		void generateLiveRanges(std::set<SSAValue*>& liveRanges, std::vector<SSAValue*>& phis, SSAValue* instTail, SSAValue* stopAt);
+		void printLiveRanges();
+		void handleTraverseStep(BasicBlock* bb);
+
 
     private:
         int maxID; // current number of SSAValues created
@@ -249,6 +275,10 @@ class SSA {
 		BasicBlock* context;
 
 		std::string funcName;
+
+		std::unordered_map<SSAValue*, std::set<SSAValue*>> iGraph;
+
+
 
         
 };

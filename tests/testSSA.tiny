@@ -1,58 +1,36 @@
 main 
-
-var alpha,beta,gamma;
-var v0, v1, v2;
-
-function f1 ( arg0, arg1, arg2 );
-    var fvar0;
-    var fvar1;
-    {
-        if arg0 > 0
-        then
-            let fvar0 <- arg1 / 2 + arg2;
-        else
-            let fvar0 <- 0;
-        fi;
-        return fvar0;
-    };
-
+    var a, b, c, d, e, y;
 {
-    let v0 <- 5;
-    let v1 <- 1;
-    while v0 > 0
-    do
-        let v0 <- v0 - 1;
-        let v1 <- v1 * 2;
-    od;
-    call OutputNum(call f1(1,v1,1));
-}.
-
-/*
-
-main 
-    var a, b;
-    function calculate(a, b, op);
-        var c;
-    {
-        if op == 1 then
-            let c <- a + b;
-        else
-            let c <- a - b;
-        fi;
-        return c;
-    };
-    void function printCalc(a, b, op);
-        var c;
-    {
-        let c <- call calculate(a, b, op);
-        call OutputNum(c);
-        call OutputNewLine();
-    };
-{
-
     let a <- call InputNum();
     let b <- call InputNum();
-    call printCalc(a, b, 1);
-
+    let c <- b;
+    let d <- b + c;
+    let e <- a + b;
+    let y <- a;
+    if a < 0 then
+      let d <- d + e;
+      let a <- d;
+    else
+      let d <- e;
+    fi;
+    call OutputNum(a);
+    call OutputNum(b);
 }.
+/*
+
+-2: CONST #2;
+-1: CONST #7;
+0: read;
+1: read;
+2: MULOP(0)(1); lArg: a, rArg: b, No Dom Inst with Opcode
+3: MULOP(0)(-1); lArg: a, rArg: , 2: MULOP(0)(1)
+4: ADDOP(2)(3); lArg: _, rArg: _, No Dom Inst with Opcode
+5: CMP(0)(1); lArg: a, rArg: b, No Dom Inst with Opcode
+6: BGE(5)(7); lArg: , rArg: , No Dom Inst with Opcode {4, 5, 8}
+
+7: NOP;
+8: PHI(-2)(0); lArg: , rArg: , No Dom Inst with Opcode {4}
+9: write(4); lArg: 
+
+
 */

@@ -3,7 +3,9 @@
 #include <stdexcept>
 #include <iostream>
 #include <string>
-
+#include <set>
+#include <queue>
+#include <stack>
 
 // ssa value class
 
@@ -173,13 +175,14 @@ SSAValue* SSA::SSACreateWhilePhi(SSAValue* x, SSAValue* y) {
 	return result;
 }
 
-void SSA::SSACreate(opcode operation, SSAValue* y) {
+SSAValue* SSA::SSACreate(opcode operation, SSAValue* y) {
 	SSAValue* result = new SSAValue();
 	result->id = maxID++;
 	result->op = operation;
 	result->operand1 = y;
 	addInOrder(result);
 	addSSAValue(result);
+	return result;
 }
 
 SSAValue* SSA::SSACreateArgAssign(std::string argName) {
@@ -705,6 +708,7 @@ void SSA::connectFT(BasicBlock* from, BasicBlock* to) {
 	if (from->fallThrough == nullptr) {
 
 		from->fallThrough = to;
+		to->fallThroughFrom = from;
 	}
 }
 
@@ -712,9 +716,15 @@ void SSA::connectBR(BasicBlock* from, BasicBlock* to) {
 	if (context->branch != nullptr) {
 		std::cout << "BR" << context->branch->id << "BAD" << std::endl;
 	}
-	if (from->branch == nullptr) {
+	if (from != nullptr && from->branch == nullptr) {
 		from->branch = to;
+		to->branchFrom = from;
 	}
+}
+
+void SSA::connectLoop(BasicBlock* from, BasicBlock* to) {
+	from->loop = to;
+	to->loopBackFrom = from;
 }
 
 BasicBlock* SSA::getContext() {
@@ -734,6 +744,9 @@ BasicBlock* SSA::createBlock() {
 }
 void SSA::setJoinType(BasicBlock* block, std::string type) {
 	block->joinType = type;
+	//if (type == "while") {
+	//	block->isWhile = true;
+	//}
 }
 
 void SSA::initBlock(BasicBlock* blockToInit) {
@@ -926,9 +939,7 @@ std::string BasicBlock::bbRepr() {
 	SSAValue* current = head;
 
 	SSAValue* stopAt;
-	if (head == nullptr) {
-		std::cout << "BIG FUCK" << std::endl;
-	}
+
 	if (tail == nullptr) {
 		stopAt= head;
 	} else {
@@ -954,9 +965,9 @@ std::string BasicBlock::bbRepr() {
 		}
 		std::string toIDStr = std::to_string(fallThrough->id);
 
-		if (tail != nullptr && tail->op == BRA) {
-			type = "BR";
-		}
+		//if (tail != nullptr && tail->op == BRA) {
+		//	type = "BR";
+		//}
 		std::string out = funcName + fromIDStr + ":s -> " + funcName + toIDStr + ":n [label=\"" + type + "\"];";
 		bbString += "\n" + out;
 	}
@@ -964,6 +975,12 @@ std::string BasicBlock::bbRepr() {
 		std::string fromIDStr = std::to_string(id);
 		std::string toIDStr = std::to_string(branch->id);
 		std::string out = funcName + fromIDStr + ":s -> " + funcName + toIDStr + ":n [label=\"" + "BR" + "\"];";
+		bbString += "\n" + out;
+	}
+	if (loop != nullptr) {
+		std::string fromIDStr = std::to_string(id);
+		std::string toIDStr = std::to_string(loop->id);
+		std::string out = funcName + fromIDStr + ":s -> " + funcName + toIDStr + ":n [label=\"" + "BRLoop" + "\"];";
 		bbString += "\n" + out;
 	}
 	if (dom != nullptr) {
@@ -975,35 +992,6 @@ std::string BasicBlock::bbRepr() {
 	return bbString;
 }
 
-
-// BBEdge
-BBEdge::BBEdge(BasicBlock* fromBlock, BasicBlock* toBlock, std::string edgeType) {
-	from = fromBlock;
-	to = toBlock;
-	type = edgeType;
-}
-
-BasicBlock* BBEdge::getFrom() {
-	return from;
-}
-BasicBlock* BBEdge::getTo() {
-	return to;
-}
-std::string BBEdge::getType() {
-	return type;
-}
-
-std::string BBEdge::bbEdgeRepr() {
-	int fromID = from->getID();
-	int toID = to->getID();
-
-	std::string fromIDStr = std::to_string(fromID);
-	std::string toIDStr = std::to_string(toID);
-
-
-	std::string out = "bb" + fromIDStr + ":s -> bb" + toIDStr + ":n [label=\"" + type + "\"];";
-	return out;
-}
 
 void SSA::reset() {
 	maxID = 0;
@@ -1019,4 +1007,441 @@ void SSA::reset() {
 	inOrder = std::vector<std::vector<SSAValue*>>();
 
 	//constTable = std::unordered_map<int, SSAValue*>();
+}
+
+
+
+void SSA::generateLiveRanges(std::set<SSAValue*>& liveRanges, std::vector<SSAValue*>& phis, SSAValue* instTail, SSAValue* stopAt) {
+
+	//map liverange;
+	//list curLiveValues = {};
+	//while curInst not head:
+	//if curInst in curLiveValues :
+	//curLiveValues - {curInst}
+	//curLiveValues = curLiveValues + {curInst->operands};
+	//liverange[curInst#] = curLiveValues
+	//	curInst = curInst->prev
+
+	SSAValue* iter = instTail;
+
+	while (iter != stopAt && iter->op != CONST) {
+		std::cout << "Current iter is " << iter->instCFGRepr() << ", set is: " << std::endl;
+		
+		for (SSAValue* val : liveRanges) {
+			std::cout << val->id << ", ";
+		}
+		std::cout << std::endl;
+		if (iter->op == PHI) {
+			phis.push_back(iter);
+		}
+		bool deadCode = false;
+		if ((liveRanges.find(iter) != liveRanges.end())) {
+			liveRanges.erase(iter);
+		} else {
+			deadCode = true;
+		}
+		if ((iter->op < BRA || iter->op > NOP) && !iter->isVoidCall) {
+			if (deadCode) {
+				iter->deadCode = deadCode;
+			}
+			for (SSAValue* lrVal : liveRanges) {
+				try {
+					std::set<SSAValue*> iGraphSet = iGraph.at(iter);
+					iGraphSet.insert(lrVal);
+					iGraph.insert_or_assign(iter, iGraphSet);
+				}
+				catch (std::out_of_range& oor) {
+					std::set<SSAValue*> innerSet;
+					innerSet.insert(lrVal);
+					iGraph.insert({ iter, innerSet });
+					// intentionally left blank
+				}
+				//try {
+				//	std::set<SSAValue*> iGraphSet = iGraph.at(lrVal);
+				//	//std::cout << "checking " << iter->instCFGRepr() << std::endl;
+				//	iGraphSet.insert(iter);
+				//}
+				//catch (std::out_of_range& oor) {
+				//	std::set<SSAValue*> innerSet;
+				//	innerSet.insert(iter);
+				//	iGraph.insert({ lrVal, innerSet });
+				//
+				////	// intentionally left blank
+				//}
+
+			}
+		}
+		if (iter->op == call) {
+			for (SSAValue* callArg : iter->callArgs) {
+				if (callArg->op != CONST) {
+					liveRanges.insert(callArg);
+				}
+			}
+		} else if (iter->op == PHI) {
+			// do nothing
+		} else {
+			if (iter->operand1 != nullptr && iter->operand1->op != CONST) {
+				if (iter->operand1->op != NOP) {
+					liveRanges.insert(iter->operand1);
+
+				}
+			}
+			if (iter->operand2 != nullptr && iter->operand2->op != CONST) {
+				if (iter->operand2->op != NOP) {
+					liveRanges.insert(iter->operand2);
+
+				}
+			}
+
+		}
+		iter = iter->prev;
+	}
+}
+
+void SSA::printLiveRanges() {
+	std::cout << "digraph iGraph {" << std::endl;
+	std::vector<std::tuple<int, int>> madeEdges;
+	for (auto kv : iGraph) {
+		std::string id = std::to_string(kv.first->id);
+		std::string output;
+		if (!kv.first->deadCode) {
+			output = id + "[label=\"" + kv.first->instCFGRepr() + "\"]\n";
+		} else {
+			output = id + "[style=filled fillcolor=\"red\" label=\"" + kv.first->instCFGRepr() + " - DEAD\"]\n";
+		}
+		
+		for (SSAValue* interElem : kv.second) {
+			bool addEdge = true;
+			for (auto tup : madeEdges) {
+				if ( (std::get<0>(tup) == kv.first->id && std::get<1>(tup) == interElem->id)
+					or (std::get<0>(tup) == interElem->id && std::get<0>(tup) == kv.first->id)) {
+					addEdge = false;
+				}
+			}
+			if (addEdge) {
+				output += id + " -> " + std::to_string(interElem->id) + " [arrowhead=none]\n";
+				std::tuple<int, int> newTup1 = std::make_tuple(kv.first->id, interElem->id);
+				std::tuple<int, int> newTup2 = std::make_tuple(interElem->id, kv.first->id);
+				madeEdges.push_back(newTup1);
+				madeEdges.push_back(newTup2);
+
+			}
+
+
+
+		}
+		std::cout << output << std::endl;
+	}
+	std::cout << "}" << std::endl;
+}
+
+bool elemExistsInStack(std::stack<BasicBlock*> stackCopy, BasicBlock* toFind) {
+	if (stackCopy.top() != toFind) {
+		if (stackCopy.size() == 1) {
+			return false;
+		} else {
+			stackCopy.pop();
+			return elemExistsInStack(stackCopy, toFind);
+		}
+	}
+}
+
+
+void SSA::traverseBasicBlocks(BasicBlock* startBlock) {
+	std::queue<BasicBlock*> q;
+	q.push(startBlock);
+	while (q.size() != 0) {
+		//std::cout << "Items in q are: ";
+		//std::queue<BasicBlock*> copy = q;
+		//while (copy.size() != 0) {
+		//	std::cout << copy.front()->id << "[ " << copy.front()->numVisits << " ], ";
+		//	copy.pop();
+		//}
+		//std::cout << std::endl;
+		BasicBlock* currentBlock = q.front();
+		q.pop();
+		if (!currentBlock->visited) {
+			std::cout << currentBlock->getID() << std::endl;
+			handleTraverseStep(currentBlock);
+		}
+		if (! (currentBlock->joinType == "while") && !(currentBlock->splitType == "if") ) {
+			currentBlock->visited = true;
+		} 
+		startBlock->visited = true;
+		//currentBlock->visited = true;
+		//std::cout << "split type is " << currentBlock->splitType << std::endl;
+		if (currentBlock->joinType == "while") {
+			// in while join block
+			//std::cout << "Current Block num visits is " << currentBlock->numVisits << std::endl;
+			if (currentBlock->numVisits == 1) {
+				//std::cout << "In while join" << std::endl;
+				//std::cout << "Adding loopfrom block " << currentBlock->loopBackFrom->id << " from the " << currentBlock->id << " block" << std::endl;
+
+				q.push(currentBlock->loopBackFrom);
+				currentBlock->numVisits = 1;
+				currentBlock->loopBackFrom->numVisits += 1;
+			} else if (currentBlock->numVisits == 2) {
+				BasicBlock* ftBlock = currentBlock->fallThroughFrom;
+				BasicBlock* brBlock = currentBlock->branchFrom;
+				if (ftBlock != nullptr && ftBlock->id != -1) {
+					//std::cout << "In while join" << std::endl;
+					//std::cout << "Adding ftfrom block " << ftBlock->id << " from the " << currentBlock->id << " block" << std::endl;
+					q.push(ftBlock);
+					ftBlock->numVisits += 1;
+				} if (brBlock != nullptr && brBlock->id != -1) {
+					//std::cout << "In while join" << std::endl;
+					//std::cout << "Adding branchfrom block " << brBlock->id << " from the " << currentBlock->id << " block" << std::endl;
+					q.push(brBlock);
+					brBlock->numVisits += 1;
+				}
+				currentBlock->numVisits += 1;
+				currentBlock->visited = true;
+
+			}
+		} else if (currentBlock->splitType == "if") {
+			if (currentBlock->numVisits == 2) {
+				BasicBlock* ftBlock = currentBlock->fallThroughFrom;
+				BasicBlock* brBlock = currentBlock->branchFrom;
+				//std::cout << "in if split" << std::endl;
+				if (ftBlock != nullptr && ftBlock->id != -1) {
+					std::cout << "In if split" << std::endl;
+					std::cout << "Adding ftfrom block " << ftBlock->id << " from the " << currentBlock->id << " block" << std::endl;
+					q.push(ftBlock);
+					ftBlock->numVisits += 1;
+				} if (brBlock != nullptr && brBlock->id != -1) {
+					//std::cout << "In if split" << std::endl;
+					//std::cout << "Adding branchfrom block " << brBlock->id << " from the " << currentBlock->id << " block" << std::endl;
+					q.push(brBlock);
+					brBlock->numVisits += 1;
+				}
+				currentBlock->numVisits += 1;
+				currentBlock->visited = true;
+
+
+			} else {
+				std::cout << "split type is if but num visits is NOT 2 fuckers!!" << std::endl;
+			}
+
+		} else {
+			BasicBlock* ftBlock = currentBlock->fallThroughFrom;
+			BasicBlock* brBlock = currentBlock->branchFrom;
+
+
+			if (ftBlock != nullptr && ftBlock->joinType == "while" && ftBlock->numVisits == 1) {
+				//std::cout << "Should only be adding while join here" << std::endl;
+				//std::cout << "Adding ftfrom block " << ftBlock->id << " from the " << currentBlock->id << " block" << std::endl;
+				q.push(ftBlock);
+				ftBlock->numVisits += 1;
+			} else if (ftBlock != nullptr && !ftBlock->visited && ftBlock->id != -1) {
+				//std::cout << "Adding ftfrom block " << ftBlock->id << " from the " << currentBlock->id << " block" << std::endl;
+
+				q.push(ftBlock);
+				ftBlock->numVisits += 1;
+			}
+			if (brBlock != nullptr && !brBlock->visited && brBlock->id != -1) {
+				//std::cout << "Adding branchfrom block " << brBlock->id << " from the " << currentBlock->id << " block" << std::endl;
+				q.push(brBlock);
+				brBlock->numVisits += 1;
+
+			}
+		}
+	}
+	//std::stack<BasicBlock*> s;
+	//q.push(startBlock);
+	//startBlock->visited = true;
+	//BasicBlock* savedBlock = nullptr;
+	//while (q.size() != 0) {
+	//	BasicBlock* currentBlock = q.front();
+	//	if (savedBlock == nullptr) {
+	//		//std::cout << "saved block is empty" << std::endl;
+	//	} else {
+	//		//std::cout << "saved block is " << savedBlock->getID() << std::endl;
+	//	}
+	//	if (s.size() > 1 && savedBlock == s.top()) {
+	//		//std::cout << "in savedblock == s.top() check " << std::endl;
+	//		s.pop();
+	//		currentBlock = savedBlock;
+	//		savedBlock = s.top();
+	//	} else {
+	//		if (currentBlock->isWhile) {
+	//			if (currentBlock->joinType == "") {
+	//				// while block that has been visited already
+	//				if (s.size() > 0 && currentBlock != s.top() ) {
+	//					//std::cout << currentBlock->id <<" coming from here" << std::endl;
+	//					//std::cout << "top of stack is " << s.top()->id << std::endl;
+	//					//std::cout << "going over join block again but too early " << currentBlock->getID() << std::endl;
+	//					savedBlock = currentBlock;
+
+	//					if (q.size() > 0) {
+	//						q.pop();
+	//					}
+	//					if (q.size() > 0) {
+	//						currentBlock = q.front();
+	//						//std::cout << "current block is now " << currentBlock->getID() << std::endl;
+
+	//					} else {
+	//						currentBlock = s.top();
+	//						s.pop();
+	//					}
+	//				}
+	//			}
+	//		}
+	//		if (q.size() > 0) {
+
+	//			q.pop();
+	//		}
+	//	}
+
+	//	std::cout << currentBlock->getID() << std::endl;
+	//	if (currentBlock->fallThroughFrom != nullptr && currentBlock->fallThroughFrom->visited == false) {
+	//		if (currentBlock->fallThroughFrom->id != -1 && currentBlock->joinType != "while") {
+	//			BasicBlock* myBB = currentBlock->fallThroughFrom;
+	//			q.push(myBB);
+
+	//		}
+	//		if (currentBlock->fallThroughFrom->joinType != "while") {
+	//			currentBlock->fallThroughFrom->visited = true;
+	//		} else {
+	//			currentBlock->fallThroughFrom->joinType = "";
+	//			s.push(currentBlock->fallThroughFrom);
+	//		}
+	//	}
+	//	if (currentBlock->branchFrom != nullptr && currentBlock->branchFrom->visited == false) {
+	//		BasicBlock* myBB = currentBlock->branchFrom;
+	//		//if (myBB->isWhile) {
+	//		//	if (myBB->joinType == "while") {
+	//		//		// not yet visited
+	//		//		q.push(myBB);
+	//		//	} else {
+	//		//		// already visited
+	//		//		if (myBB == s.top()) {
+	//		//			//std::cout << myBB->getID() << s.top()->getID() << std::endl;
+	//		//			s.pop();
+	//		//			q.push(myBB);
+	//		//		}
+	//		//	}
+	//		//} else {
+	//		//	q.push(myBB);
+	//		//}
+	//		q.push(myBB);
+	//		if (currentBlock->branchFrom->joinType != "while") {
+	//			currentBlock->branchFrom->visited = true;
+
+	//		} else {
+	//			currentBlock->branchFrom->joinType = "";
+	//			s.push(currentBlock->branchFrom);
+	//		}
+	//	}
+
+	//	if (q.size() == 0 && s.size() > 0) {
+	//		q.push(s.top());
+	//		//std::cout << s.top()->getID() << " is the top of the stack" << std::endl;
+	//		s.pop();
+	//	}
+	//}
+
+	////if its a while join
+	////	if it has been visited once
+	////		if it is the top on the stack
+	////			add to queue
+	////  else
+	////      add to queue
+	////else
+	////	add to queue
+	//// 
+
+	////BasicBlock* myBB = currentBlock->fallThroughFrom;
+	////if (myBB->isWhile) {
+	////	if (myBB->joinType == "while") {
+	////		// not yet visited
+	////		q.push(myBB);
+	////	} else {
+	////		// already visited
+	////		if (myBB == s.top()) {
+	////			q.push(myBB);
+	////		}
+	////	}
+	////} else {
+	////	q.push(myBB);
+	////}
+
+
+	////if (currentBlock->fallThroughFrom != nullptr) {
+	////	traverseBasicBlocks(currentBlock->fallThroughFrom);
+	////}
+	////if (currentBlock->branchFrom != nullptr) {
+	////	traverseBasicBlocks(currentBlock->branchFrom);
+	////}
+
+}
+
+void SSA::correctBasicBlockIssues() {
+	for (BasicBlock* bb : basicBlocks) {
+		if (bb->tail != nullptr && bb->tail->op == BRA) {
+			BasicBlock* nextBlock = bb->fallThrough;
+
+			if (nextBlock != nullptr) {
+				bb->fallThrough = nullptr;
+				bb->branch = nextBlock;
+				nextBlock->branchFrom = bb;
+			}
+		}
+		if (bb->fallThrough != nullptr && bb->fallThrough->id != bb->id + 1) {
+			BasicBlock* correctBlock = findBBWithID(bb->id + 1);
+			bb->fallThrough = correctBlock;
+			correctBlock->fallThroughFrom = bb;
+		}
+	}
+}
+
+BasicBlock* SSA::findBBWithID(int id) {
+	for (BasicBlock* bb : basicBlocks) {
+		if (bb->id == id) {
+			return bb;
+		}
+	}
+	return nullptr;
+}
+
+BasicBlock* SSA::getBBListHead() {
+	return bbListHead;
+}
+
+BasicBlock* SSA::getBBTail() {
+	return context;
+}
+
+void BasicBlock::unionLiveRanges(BasicBlock* toUnionFrom, std::string edgeType) {
+	if (toUnionFrom != nullptr) {
+		for (SSAValue* val : toUnionFrom->liveRanges) {
+			liveRanges.insert(val);
+		}
+		for (SSAValue* phi : toUnionFrom->phis) {
+			if (edgeType == "br") {
+				if (phi->operand1->op != CONST) {
+					liveRanges.insert(phi->operand1);
+				}
+			} else if (edgeType == "ft") {
+				if (phi->operand2->op != CONST) {
+					liveRanges.insert(phi->operand2);
+				}
+			} else {
+				// do loop stuff
+			}
+		}
+	}
+}
+
+void SSA::handleTraverseStep(BasicBlock* bb) {
+	bb->unionLiveRanges(bb->fallThrough, "ft");
+	bb->unionLiveRanges(bb->branch, "br");
+	bb->unionLiveRanges(bb->loop, "loop");
+	SSAValue* stopAt; 
+	if (bb->head != nullptr) {
+		stopAt = bb->head->prev;
+	} else {
+		stopAt = nullptr;
+	}
+	generateLiveRanges(bb->liveRanges, bb->phis, bb->tail, stopAt);
+
 }
