@@ -1411,31 +1411,71 @@ BasicBlock* SSA::getBBTail() {
 	return context;
 }
 
-void BasicBlock::unionLiveRanges(BasicBlock* toUnionFrom, std::string edgeType) {
+void BasicBlock::unionLiveRanges(BasicBlock* toUnionFrom, std::string sideOfPhi) {
 	if (toUnionFrom != nullptr) {
 		for (SSAValue* val : toUnionFrom->liveRanges) {
 			liveRanges.insert(val);
 		}
 		for (SSAValue* phi : toUnionFrom->phis) {
-			if (edgeType == "br") {
+			if (sideOfPhi == "left") {
 				if (phi->operand1->op != CONST) {
 					liveRanges.insert(phi->operand1);
 				}
-			} else if (edgeType == "ft") {
+			} else if (sideOfPhi == "right") {
 				if (phi->operand2->op != CONST) {
 					liveRanges.insert(phi->operand2);
 				}
 			} else {
-				// do loop stuff
+				// blank for now
 			}
 		}
 	}
 }
 
 void SSA::handleTraverseStep(BasicBlock* bb) {
-	bb->unionLiveRanges(bb->fallThrough, "ft");
-	bb->unionLiveRanges(bb->branch, "br");
-	bb->unionLiveRanges(bb->loop, "loop");
+
+	if (bb->conditionalBlockType == "ifThenElse-Else") {
+		if (bb->branch == nullptr && bb->loop == nullptr) {
+			// at the end of else in if-then-else struct
+			bb->unionLiveRanges(bb->fallThrough, "right");
+		} else {
+			bb->unionLiveRanges(bb->fallThrough, "left");
+			bb->unionLiveRanges(bb->branch, "right");
+		}
+	} else if (bb->conditionalBlockType == "ifThenElse-Then") {
+		if (bb->fallThrough == nullptr && bb->loop == nullptr) {
+			// at the end of then in if-then-else struct
+			bb->unionLiveRanges(bb->branch, "left");
+		} else {
+			// suss
+			bb->unionLiveRanges(bb->fallThrough, "left");
+			bb->unionLiveRanges(bb->branch, "right");
+		}
+
+	} else if (bb->conditionalBlockType == "ifThen-Then") {
+		if (bb->branch == nullptr && bb->loop == nullptr) {
+			// at the end of then in if-then struct
+			bb->unionLiveRanges(bb->fallThrough, "left");
+		} else {
+			//std::cout << "None of the above cases" << std::endl;
+			//std::cout << bb->bbRepr() << std::endl;
+			bb->unionLiveRanges(bb->fallThrough, "");
+			bb->unionLiveRanges(bb->branch, "right");
+		}
+	} else {
+
+		bb->unionLiveRanges(bb->fallThrough, "");
+		bb->unionLiveRanges(bb->branch, "right");
+		bb->unionLiveRanges(bb->loop, "");
+	}
+
+
+	//bb->unionLiveRanges(bb->fallThrough, "ft");
+	//bb->unionLiveRanges(bb->branch, "br");
+	//bb->unionLiveRanges(bb->loop, "loop");
+
+	//bb->unionLiveRanges(bb->fallThrough, "ft");
+	//bb->unionLiveRanges(bb->branch, "br");
 	SSAValue* stopAt; 
 	if (bb->head != nullptr) {
 		stopAt = bb->head->prev;

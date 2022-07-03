@@ -441,8 +441,9 @@ void Parser::ifStatement() {
 
 				//joinBlock = ssa->createContext();
 				ssa->connectBR(thenBlock, joinBlock);
+				thenBlock->conditionalBlockType = "ifThenElse-Then";
 				ssa->connectFT(elseBlock, joinBlock);
-
+				elseBlock->conditionalBlockType = "ifThenElse-Else";
 				for (auto kv : thenPhiMap) {
 					try {
 						SSAValue* val = elsePhiMap.at(kv.first);
@@ -476,6 +477,7 @@ void Parser::ifStatement() {
 				//joinBlock = ssa->createContext();
 				ssa->updateNop(elseHead);
 				ssa->connectFT(thenBlock, joinBlock);
+				thenBlock->conditionalBlockType = "ifThen-Then";
 				ssa->connectBR(splitBlock, ssa->getContext());
 				ssa->getContext()->alreadyConnected = true;
 				ssa->getContext()->alreadyConnectedBranch = true;
@@ -513,15 +515,18 @@ void Parser::ifStatement() {
 			savedJoinBlock->fallThroughFrom = nullptr;
 			if (prevFTBlock != nullptr) {
 				prevFTBlock->fallThrough = nullptr;
+				prevFTBlock->conditionalBlockType = "ifThenElse-Then";
 
 			}
 			ssa->connectBR(prevFTBlock, savedJoinBlock);
 			ssa->connectFT(joinBlock, savedJoinBlock);
+			joinBlock->conditionalBlockType = "ifThenElse-Else";
 
 		} else {
 			// outer condition is if then
 			std::cout << "outer condition is just if then " << ssa->getContext()->getID() << std::endl;
 			ssa->connectFT(joinBlock, savedJoinBlock);
+			joinBlock->conditionalBlockType = "ifThen-Then";
 			savedJoinBlock->alreadyConnected = true;
 		}
 	}

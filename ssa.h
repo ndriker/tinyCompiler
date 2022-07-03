@@ -144,7 +144,7 @@ class BasicBlock {
 		std::string funcName;
 		BasicBlock* dom;
 		bool visited;
-		bool ifThenJoinBlock;
+		bool ifThenJoinBlock; // technically if then else join block
 		bool alreadyConnectedBranch;
 		bool alreadyConnectedFT;
 		bool alreadyConnected;
@@ -154,6 +154,8 @@ class BasicBlock {
 
 		std::set<SSAValue*> liveRanges;
 		std::vector<SSAValue*> phis;
+
+		std::string conditionalBlockType;
 
 };
 

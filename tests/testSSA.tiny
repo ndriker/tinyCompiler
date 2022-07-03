@@ -3,21 +3,24 @@ main
 {
     let a <- call InputNum();
     let b <- call InputNum();
-    let c <- b;
-    let d <- b + c;
-    let e <- a + b;
-    let y <- a;
-    if a < 0 then
-      let d <- d + e;
-      let a <- d;
+    let c <- a;
+    let d <- b;
+    if a < b then
+        let a <- a + 1;
+        if a > b then
+            let b <- a + 1;
+        fi;
     else
-      let d <- e;
+        let a <- a + 1;
+        if a > b then
+            let b <- a + 1;
+        fi;
     fi;
-    call OutputNum(a);
-    call OutputNum(b);
 }.
 /*
-
+        while a > b do
+            let a <- a + 2;
+        od;
 -2: CONST #2;
 -1: CONST #7;
 0: read;
