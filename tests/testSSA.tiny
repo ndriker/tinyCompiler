@@ -5,16 +5,11 @@ main
     let b <- call InputNum();
     let c <- a;
     let d <- b;
-    if a < b then
-        let a <- a + 1;
-        if a > b then
-            let b <- a + 1;
-        fi;
-    else
-        let a <- a + 1;
-        if a > b then
-            let b <- a + 1;
-        fi;
+    if a > b then
+        while a < b do
+            let a <- a + 2;
+        od;
+
     fi;
 }.
 /*

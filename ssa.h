@@ -159,6 +159,17 @@ class BasicBlock {
 
 };
 
+class IGraphNode {
+	public:
+		IGraphNode(SSAValue* val, int nodeID);
+		SSAValue* singleValue;
+		std::set<SSAValue*> values;
+		std::set<IGraphNode*> connectedTo;
+		std::string iGraphNodeRepr();
+		int id;
+
+
+};
 
 class SSA {
     public:
@@ -243,15 +254,20 @@ class SSA {
 		void reset();
 		
 		void checkOperands(SSAValue* currentInst);
-		void generateLiveRanges(std::set<SSAValue*>& liveRanges, std::vector<SSAValue*>& phis, SSAValue* instTail, SSAValue* stopAt);
+		void generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, std::vector<SSAValue*>& phis, SSAValue* instTail, SSAValue* stopAt);
 		void printLiveRanges();
 		void handleTraverseStep(BasicBlock* bb);
-
-
+		void generateIGraphNodes();
+		IGraphNode* findInIGraphNodes(SSAValue* toFind);
+		void clusterIGraphNodes();
+		bool checkInterferesWith(IGraphNode* node, SSAValue* instr);
+		int findIndexOfIGraphNode(IGraphNode* toFindNode);
+		void printClusteredIGraph();
     private:
         int maxID; // current number of SSAValues created
 		int numConsts;
 		int maxBlockID;
+		int iGraphNodeID;
 		static std::unordered_map<tokenType, opcode> brOpConversions;
 
 		bool inWhile;
@@ -279,6 +295,7 @@ class SSA {
 		std::string funcName;
 
 		std::unordered_map<SSAValue*, std::set<SSAValue*>> iGraph;
+		std::vector<IGraphNode*> iGraphNodes;
 
 
 

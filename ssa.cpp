@@ -1011,7 +1011,7 @@ void SSA::reset() {
 
 
 
-void SSA::generateLiveRanges(std::set<SSAValue*>& liveRanges, std::vector<SSAValue*>& phis, SSAValue* instTail, SSAValue* stopAt) {
+void SSA::generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, std::vector<SSAValue*>& phis, SSAValue* instTail, SSAValue* stopAt) {
 
 	//map liverange;
 	//list curLiveValues = {};
@@ -1023,6 +1023,7 @@ void SSA::generateLiveRanges(std::set<SSAValue*>& liveRanges, std::vector<SSAVal
 	//	curInst = curInst->prev
 
 	SSAValue* iter = instTail;
+	bool nopEncountered = false;
 
 	while (iter != stopAt && iter->op != CONST) {
 		std::cout << "Current iter is " << iter->instCFGRepr() << ", set is: " << std::endl;
@@ -1033,6 +1034,18 @@ void SSA::generateLiveRanges(std::set<SSAValue*>& liveRanges, std::vector<SSAVal
 		std::cout << std::endl;
 		if (iter->op == PHI) {
 			phis.push_back(iter);
+		}
+		if (iter->op == NOP) {
+			nopEncountered = true;
+		}
+		if (nopEncountered && bb->joinType == "while" && bb->numVisits == 1) {
+			// above the phi instructions in while join block
+			break;
+		} else if (nopEncountered && bb->joinType == "while" && bb->numVisits == 2) {
+			std::cout << "While Join Above the Phis Visited twice" << std::endl;
+			for (SSAValue* phi : phis) {
+				liveRanges.insert(phi->operand1);
+			}
 		}
 		bool deadCode = false;
 		if ((liveRanges.find(iter) != liveRanges.end())) {
@@ -1100,12 +1113,16 @@ void SSA::generateLiveRanges(std::set<SSAValue*>& liveRanges, std::vector<SSAVal
 
 void SSA::printLiveRanges() {
 	std::cout << "digraph iGraph {" << std::endl;
+	std::set<SSAValue*> labelsCreated;
 	std::vector<std::tuple<int, int>> madeEdges;
 	for (auto kv : iGraph) {
 		std::string id = std::to_string(kv.first->id);
 		std::string output;
 		if (!kv.first->deadCode) {
-			output = id + "[label=\"" + kv.first->instCFGRepr() + "\"]\n";
+			if (labelsCreated.find(kv.first) == labelsCreated.end()) {
+				output = id + "[label=\"" + kv.first->instCFGRepr() + "\"]\n";
+			}
+			labelsCreated.insert(kv.first);
 		} else {
 			output = id + "[style=filled fillcolor=\"red\" label=\"" + kv.first->instCFGRepr() + " - DEAD\"]\n";
 		}
@@ -1119,6 +1136,10 @@ void SSA::printLiveRanges() {
 				}
 			}
 			if (addEdge) {
+				if (labelsCreated.find(interElem) == labelsCreated.end()) {
+					output += std::to_string(interElem->id) + "[label=\"" + interElem->instCFGRepr() + "\"]\n";
+					labelsCreated.insert(interElem);
+				}
 				output += id + " -> " + std::to_string(interElem->id) + " [arrowhead=none]\n";
 				std::tuple<int, int> newTup1 = std::make_tuple(kv.first->id, interElem->id);
 				std::tuple<int, int> newTup2 = std::make_tuple(interElem->id, kv.first->id);
@@ -1463,10 +1484,18 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 			bb->unionLiveRanges(bb->branch, "right");
 		}
 	} else {
+		if (bb->loop != nullptr) {
+			// end of while body struct
+			std::cout << "Found while body block" << std::endl;
+			std::cout << bb->bbRepr() << std::endl;
+			bb->unionLiveRanges(bb->loop, "right");
+		} else {
+			std::cout << "Issue is here" << std::endl;
+			bb->unionLiveRanges(bb->fallThrough, "");
+			bb->unionLiveRanges(bb->branch, ""); // suss
+			bb->unionLiveRanges(bb->loop, "");
 
-		bb->unionLiveRanges(bb->fallThrough, "");
-		bb->unionLiveRanges(bb->branch, "right");
-		bb->unionLiveRanges(bb->loop, "");
+		}
 	}
 
 
@@ -1482,6 +1511,102 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 	} else {
 		stopAt = nullptr;
 	}
-	generateLiveRanges(bb->liveRanges, bb->phis, bb->tail, stopAt);
+	generateLiveRanges(bb, bb->liveRanges, bb->phis, bb->tail, stopAt);
+
+}
+
+IGraphNode* SSA::findInIGraphNodes(SSAValue* toFind) {
+	for (IGraphNode* node : iGraphNodes) {
+		if (node->singleValue == toFind) {
+			return node;
+		}
+	}
+	return nullptr;
+}
+
+IGraphNode::IGraphNode(SSAValue* val, int nodeID) {
+	singleValue = val;
+	values.insert(val);
+	id = nodeID;
+}
+
+void SSA::generateIGraphNodes() {
+	for (auto kv : iGraph) {
+		IGraphNode* node = findInIGraphNodes(kv.first);
+		if (node == nullptr) {
+			// create a new igraph node
+			node = new IGraphNode(kv.first, iGraphNodeID++);
+			iGraphNodes.push_back(node);
+		}
+		for (SSAValue* connectedToVal : kv.second) {
+			IGraphNode* connectToNode = findInIGraphNodes(connectedToVal);
+			if (connectToNode == nullptr) {
+				// need to create a new IGraphNode
+				connectToNode = new IGraphNode(connectedToVal, iGraphNodeID++);
+				iGraphNodes.push_back(connectToNode);
+			}
+			node->connectedTo.insert(connectToNode);
+			connectToNode->connectedTo.insert(node);
+		}
+
+	}
+}
+
+bool SSA::checkInterferesWith(IGraphNode* node, SSAValue* instr) {
+	for (IGraphNode* iNode : node->connectedTo) {
+		for (SSAValue* val : iNode->values) {
+			if (val == instr) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+int SSA::findIndexOfIGraphNode(IGraphNode* toFindNode) {
+
+	for (int i = 0; i < iGraphNodes.size(); i++) {
+		if (iGraphNodes.at(i) == toFindNode) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+void SSA::clusterIGraphNodes() {
+	for (IGraphNode* node : iGraphNodes) {
+		SSAValue* val = node->singleValue;
+		if (val->op == PHI) {
+			SSAValue* phiOperand1 = val->operand1;
+			SSAValue* phiOperand2 = val->operand2;
+			if (phiOperand1->op != CONST) {
+				if (!checkInterferesWith(node, phiOperand1)) {
+					node->values.insert(phiOperand1);
+					IGraphNode* phiOp1Node = findInIGraphNodes(phiOperand1);
+					for (IGraphNode* newInter : phiOp1Node->connectedTo) {
+						node->connectedTo.insert(newInter);
+					}
+					iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp1Node) - 1);
+				}
+			}
+			if (phiOperand2->op != CONST) {
+				if (!checkInterferesWith(node, phiOperand2)) {
+					node->values.insert(phiOperand2);
+					IGraphNode* phiOp2Node = findInIGraphNodes(phiOperand2);
+					for (IGraphNode* newInter : phiOp2Node->connectedTo) {
+						node->connectedTo.insert(newInter);
+					}
+					iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp2Node) - 1);
+
+				}
+			}
+		}
+	}
+}
+
+std::string IGraphNode::iGraphNodeRepr() {
+	
+}
+void SSA::printClusteredIGraph() {
 
 }
