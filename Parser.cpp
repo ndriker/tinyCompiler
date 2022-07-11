@@ -1106,6 +1106,16 @@ void Parser::printSSA() {
 		ssa->traverseBasicBlocks(ssa->getBBTail());
 		ssa->printLiveRanges();
 		std::cout << std::endl;
+		ssa->generateIGraphNodes();
+		ssa->clusterIGraphNodes();
+		ssa->printClusteredIGraph();
+		ssa->colorGraph();
+		ssa->printClusteredIGraph();
+		ssa->generateRegisters();
+		ssa->printRegisters();
+		std::cout << std::endl;
+		printRegDotLang();
+		std::cout << std::endl;
 	}
 
 
@@ -1115,13 +1125,30 @@ void Parser::printSSA() {
 
 
 void Parser::printDotLang() {
+
 	//ssa->generateDotLang();
 	std::cout << "digraph prog {" << std::endl;
 	std::cout << "program[label = \"Program\"];" << std::endl;
 	ssa->correctBasicBlockIssues();
 	for (auto kv : programSSAs) {
 		ssa = kv.second;
-		ssa->gen();
+		ssa->gen(false);
+		std::cout << "program:s -> " + kv.first + "CONST:n [label=\"\"]" << std::endl;
+
+	}
+	std::cout << "}" << std::endl;
+}
+
+void Parser::printRegDotLang() {
+	//ssa->generateDotLang();
+	std::cout << "digraph prog {" << std::endl;
+	std::cout << "program[label = \"Program\"];" << std::endl;
+	//ssa->correctBasicBlockIssues();
+	for (auto kv : programSSAs) {
+		ssa = kv.second;
+		ssa->setRegisters();
+		ssa->cleanInstList();
+		ssa->gen(true);
 		std::cout << "program:s -> " + kv.first + "CONST:n [label=\"\"]" << std::endl;
 
 	}

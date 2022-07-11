@@ -14,13 +14,38 @@ std::string SSAValue::getTextForEnum(int enumVal) {
 }
 
 std::string SSAValue::formatOperand(SSAValue* operand) {
-	return "(" + std::to_string(operand->id) + ")";
+	if (operand->op == NOP) {
+		return "(" + operand->label + ")";
+	} else {
+		return "(" + std::to_string(operand->id) + ")";
+	}
+}
+
+std::string SSAValue::formatRegOperand(SSAValue* operand) {
+	if (operand->regNum != 0) {
+		return "(R" + std::to_string(operand->regNum) + ")";
+	} else {
+		return formatOperand(operand);
+	}
 }
 
 std::string SSAValue::callRepr() {
-	std::string output = std::to_string(id) + ": call " + argName + "(";
+	std::string output;
+	if (regNum != 0) {
+		output = "R" + std::to_string(regNum) + "= call " + argName + "(";
+	} else {
+
+		output = "call " + argName + "(";
+	}
 	for (int i = 0; i < formalParams.size(); i++) {
-		output += formalParams.at(i) + " : (" + std::to_string(callArgs.at(i)->id) + "), ";
+		SSAValue* callArg = callArgs.at(i);
+		std::string id;
+		if (callArg->regNum != 0) {
+			id = "R" + std::to_string(callArg->regNum);
+		} else {
+			id = std::to_string(callArg->id);
+		}
+		output += formalParams.at(i) + " : (" + id + "), ";
 	}
 	output.pop_back();
 	output.pop_back();
@@ -28,6 +53,16 @@ std::string SSAValue::callRepr() {
 	return output;
 }
 
+
+std::string SSAValue::moveRepr() {
+	std::string output = "MOVE R" + std::to_string(regToMoveFrom) + ", R" + std::to_string(regToMoveTo);
+	return output;
+}
+
+std::string SSAValue::moveConstRepr() {
+	std::string output = "MOVE #" + std::to_string(operand1->constValue) + ", R" + std::to_string(regToMoveTo);
+	return output;
+}
 void SSAValue::instRepr() {
 	if (op == call) {
 		std::cout << callRepr() << std::endl;
@@ -106,6 +141,42 @@ std::string SSAValue::instCFGRepr() {
 	return output;
 }
 
+std::string SSAValue::instCFGRegRepr() {
+	std::string output = "";
+/*	if (deadCode) {
+		output = "";
+	} else */
+	if (op == moveConst) {
+		output = moveConstRepr();
+	} else if (op == move) {
+		output = moveRepr();
+	} else if (op == PHI) {
+		output = "";
+	} else if (op == call) {
+		output = callRepr();
+	} else if (op == argAssign) {
+		output = "R" + std::to_string(regNum) + "= arg " + argName;
+	} else if (eliminated) {
+		output = elimRepr();
+	} else if (op == CONST) {
+		output = std::to_string(id) + ": CONST #" + std::to_string(constValue);
+	} else if (op == BRA || op == write || op == ret) {
+		output = getTextForEnum(op) + formatRegOperand(operand1);
+	} else if (op == NOP || op == writeNL) {
+		output = label + ":";
+	} else if (op == read) {
+		output = "R" + std::to_string(regNum) + "= " + getTextForEnum(op);
+	} else {
+		if (op >= BNE && op <= BGT) {
+			output = std::to_string(id) + ": " + getTextForEnum(op) + formatRegOperand(operand1) + formatRegOperand(operand2);
+		} else {
+			output = "R" + std::to_string(regNum) + "= " + getTextForEnum(op) + formatRegOperand(operand1) + formatRegOperand(operand2);
+		}
+
+	}
+	return output;
+}
+
 void SSAValue::setOpNames(std::string operand1Name, std::string operand2Name) {
 	op1Name = operand1Name;
 	op2Name = operand2Name;
@@ -164,6 +235,25 @@ SSAValue* SSA::SSACreate(opcode operation, SSAValue* x, SSAValue* y) {
 	}
 	return result;
 
+}
+
+SSAValue* SSA::SSACreateMove(int currentReg, int moveToReg) {
+	SSAValue* moveInstr = new SSAValue();
+	moveInstr->id = maxID++;
+	moveInstr->op = move;
+	moveInstr->regToMoveFrom = currentReg;
+	moveInstr->regToMoveTo = moveToReg;
+	return moveInstr;
+	
+}
+
+SSAValue* SSA::SSACreateConstMove(SSAValue* constInstr, int moveToReg) {
+	SSAValue* moveInstr = new SSAValue();
+	moveInstr->id = maxID++;
+	moveInstr->op = moveConst;
+	moveInstr->operand1 = constInstr;
+	moveInstr->regToMoveTo = moveToReg;
+	return moveInstr;
 }
 SSAValue* SSA::SSACreateWhilePhi(SSAValue* x, SSAValue* y) {
 	SSAValue* result = new SSAValue();
@@ -483,7 +573,7 @@ void SSA::printVarDeclList() {
 	}
 }
 
-std::string SSA::reprBasicBlocks(BasicBlock* head) {
+std::string SSA::reprBasicBlocks(BasicBlock* head, bool printRegs) {
 	//std::cout << head->id << std::endl;
 	//if (head == nullptr) {
 	//	return "";
@@ -494,11 +584,13 @@ std::string SSA::reprBasicBlocks(BasicBlock* head) {
 	//std::string ft = reprBasicBlocks(head->fallThrough);
 	//std::string br = reprBasicBlocks(head->branch);
 	////std::cout << ft << "\n" << br << std::endl;
-	connectFT(constBlock, bbListHead);
-	basicBlocks.push_back(constBlock);
+	if (constBlock->fallThrough == nullptr) {
+		connectFT(constBlock, bbListHead);
+		basicBlocks.push_back(constBlock);
+	}
 	std::string out_string;
 	for (BasicBlock* bb : basicBlocks) {
-		out_string += bb->bbRepr() + "\n";
+		out_string += bb->bbRepr(printRegs) + "\n";
 	}
 	return out_string;
 
@@ -646,12 +738,12 @@ std::string SSA::reprBasicBlocks(BasicBlock* head) {
 	//return info;
 //}
 
-void SSA::gen() {
+void SSA::gen(bool printRegs) {
 	//std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> info = genBasicBlocks();
 	//std::vector<BasicBlock*> basicBlocks = std::get<0>(info);
 	//std::vector<BBEdge*> bbEdges = std::get<1>(info);
 
-	std::cout << reprBasicBlocks(bbListHead) << std::endl;
+	std::cout << reprBasicBlocks(bbListHead, printRegs) << std::endl;
 	//for (BasicBlock* bb: basicBlocks) {
 	//	std::cout << bb->bbRepr() << std::endl;
 	//}
@@ -690,6 +782,7 @@ void SSA::addInstToBB(SSAValue* inst) {
 
 		}
 	}
+	inst->containingBB = context;
 }
 
 void SSA::addInstToConstBB(SSAValue* inst) {
@@ -935,7 +1028,7 @@ int BasicBlock::getID() {
 //	id = bbID;
 //}
 
-std::string BasicBlock::bbRepr() {
+std::string BasicBlock::bbRepr(bool printRegs) {
 	SSAValue* current = head;
 
 	SSAValue* stopAt;
@@ -951,7 +1044,12 @@ std::string BasicBlock::bbRepr() {
 	}
 	std::string bbString = funcName + bbIDStr + "[shape=record, label=\" < b > " + funcName + bbIDStr + " | {";
 	while (current!= nullptr && current != stopAt) {
-		bbString = bbString + current->instCFGRepr() + "|";
+		if (printRegs) {
+			bbString = bbString + current->instCFGRegRepr() + "|";
+		} else {
+			bbString = bbString + current->instCFGRepr() + "|";
+
+		}
 		current = current->next;
 	}
 	bbString.pop_back();
@@ -1048,27 +1146,45 @@ void SSA::generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, st
 			}
 		}
 		bool deadCode = false;
-		if ((liveRanges.find(iter) != liveRanges.end())) {
+		if (liveRanges.find(iter) != liveRanges.end()) {
+			std::cout << "not in dead code condition" << std::endl;
 			liveRanges.erase(iter);
+
 		} else {
-			deadCode = true;
+			if ( (iter->op >= BRA && iter->op <= BGT) || 
+				 (iter->op == write) || (iter->op == writeNL)) {
+
+			} else {
+				std::cout << "in dead code" << std::endl;
+				deadCode = true;
+			}
 		}
 		if ((iter->op < BRA || iter->op > NOP) && !iter->isVoidCall) {
 			if (deadCode) {
 				iter->deadCode = deadCode;
 			}
+
+			std::set<SSAValue*> iGraphSet;
+			try {
+				iGraphSet = iGraph.at(iter);
+			} catch (std::out_of_range& oor) {
+				iGraphSet = std::set<SSAValue*>();
+			}
+
 			for (SSAValue* lrVal : liveRanges) {
-				try {
-					std::set<SSAValue*> iGraphSet = iGraph.at(iter);
-					iGraphSet.insert(lrVal);
-					iGraph.insert_or_assign(iter, iGraphSet);
-				}
-				catch (std::out_of_range& oor) {
-					std::set<SSAValue*> innerSet;
-					innerSet.insert(lrVal);
-					iGraph.insert({ iter, innerSet });
-					// intentionally left blank
-				}
+				iGraphSet.insert(lrVal);
+
+				//try {
+				//	std::set<SSAValue*> iGraphSet = iGraph.at(iter);
+				//	iGraphSet.insert(lrVal);
+				//	iGraph.insert_or_assign(iter, iGraphSet);
+				//}
+				//catch (std::out_of_range& oor) {
+				//	std::set<SSAValue*> innerSet;
+				//	innerSet.insert(lrVal);
+				//	iGraph.insert({ iter, innerSet });
+				//	// intentionally left blank
+				//}
 				//try {
 				//	std::set<SSAValue*> iGraphSet = iGraph.at(lrVal);
 				//	//std::cout << "checking " << iter->instCFGRepr() << std::endl;
@@ -1083,6 +1199,10 @@ void SSA::generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, st
 				//}
 
 			}
+			if (!iter->deadCode) {
+				iGraph.insert({ iter, iGraphSet });
+			}
+
 		}
 		if (iter->op == call) {
 			for (SSAValue* callArg : iter->callArgs) {
@@ -1460,6 +1580,7 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 			// at the end of else in if-then-else struct
 			bb->unionLiveRanges(bb->fallThrough, "right");
 		} else {
+			std::cout << "inside of this condition" << std::endl;
 			bb->unionLiveRanges(bb->fallThrough, "left");
 			bb->unionLiveRanges(bb->branch, "right");
 		}
@@ -1487,12 +1608,24 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 		if (bb->loop != nullptr) {
 			// end of while body struct
 			std::cout << "Found while body block" << std::endl;
-			std::cout << bb->bbRepr() << std::endl;
+			std::cout << bb->bbRepr(false) << std::endl;
 			bb->unionLiveRanges(bb->loop, "right");
 		} else {
-			std::cout << "Issue is here" << std::endl;
+			std::cout << "not while body block!!!" << std::endl;
+			// need to handle cond with only then block here
+			if (bb->splitType == "if") {
+				if (bb->branch->joinType == "while") {
+					bb->unionLiveRanges(bb->branch, "left");
+				} else {
+					bb->unionLiveRanges(bb->branch, "right"); // suss
+
+				}
+			} else {
+				bb->unionLiveRanges(bb->branch, ""); // suss
+
+			}
+			//std::cout << "Issue is here" << std::endl;
 			bb->unionLiveRanges(bb->fallThrough, "");
-			bb->unionLiveRanges(bb->branch, ""); // suss
 			bb->unionLiveRanges(bb->loop, "");
 
 		}
@@ -1517,7 +1650,7 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 
 IGraphNode* SSA::findInIGraphNodes(SSAValue* toFind) {
 	for (IGraphNode* node : iGraphNodes) {
-		if (node->singleValue == toFind) {
+		if (node->initValue == toFind) {
 			return node;
 		}
 	}
@@ -1525,28 +1658,69 @@ IGraphNode* SSA::findInIGraphNodes(SSAValue* toFind) {
 }
 
 IGraphNode::IGraphNode(SSAValue* val, int nodeID) {
-	singleValue = val;
+	initValue = val;
 	values.insert(val);
 	id = nodeID;
+	moveTarget = nullptr;
+	visited = false;
+	color = -1;
 }
 
 void SSA::generateIGraphNodes() {
 	for (auto kv : iGraph) {
 		IGraphNode* node = findInIGraphNodes(kv.first);
 		if (node == nullptr) {
-			// create a new igraph node
-			node = new IGraphNode(kv.first, iGraphNodeID++);
+			node = new IGraphNode(kv.first, kv.first->id);
 			iGraphNodes.push_back(node);
+
+			for (SSAValue* val : kv.second) {
+				IGraphNode* connectToNode = findInIGraphNodes(val);
+				if (connectToNode == nullptr) {
+					connectToNode = new IGraphNode(val, val->id);
+					iGraphNodes.push_back(connectToNode);
+				}
+			}
 		}
+	}
+	for (auto kv : iGraph) {
+		IGraphNode* node = findInIGraphNodes(kv.first);
+		//if (node == nullptr) {
+		//	// create a new igraph node
+		//	node = new IGraphNode(kv.first, kv.first->id);
+		//	iGraphNodes.push_back(node);
+		//}
+		std::vector<IGraphNode*> toErase;
 		for (SSAValue* connectedToVal : kv.second) {
 			IGraphNode* connectToNode = findInIGraphNodes(connectedToVal);
-			if (connectToNode == nullptr) {
-				// need to create a new IGraphNode
-				connectToNode = new IGraphNode(connectedToVal, iGraphNodeID++);
-				iGraphNodes.push_back(connectToNode);
+			//if (connectToNode == nullptr) {
+			//	// need to create a new IGraphNode
+			//	connectToNode = new IGraphNode(connectedToVal, connectedToVal->id);
+			//	iGraphNodes.push_back(connectToNode);
+			//}
+			bool erased = false;
+			if (node->initValue->deadCode) {
+				toErase.push_back(node);
+				erased = true;
 			}
-			node->connectedTo.insert(connectToNode);
-			connectToNode->connectedTo.insert(node);
+			if (connectToNode != nullptr && connectToNode->initValue->deadCode) {
+				toErase.push_back(connectToNode);
+				erased = true;
+			}
+			if (!erased) {
+				if (connectToNode != nullptr) {
+					node->connectedTo.insert(connectToNode);
+					connectToNode->connectedTo.insert(node);
+
+				}
+			}
+
+		}
+		for (auto needToErase : toErase) {
+			int index = findIndexOfIGraphNode(needToErase);
+			if (index >= 0) {
+				iGraphNodes.erase(iGraphNodes.begin() + index);
+
+			}
 		}
 
 	}
@@ -1573,40 +1747,630 @@ int SSA::findIndexOfIGraphNode(IGraphNode* toFindNode) {
 	return -1;
 }
 
-void SSA::clusterIGraphNodes() {
+void SSA::addNewEdges(IGraphNode* newConnection, IGraphNode* oldConnection) {
+	std::vector<IGraphNode*> toEraseFrom;
 	for (IGraphNode* node : iGraphNodes) {
-		SSAValue* val = node->singleValue;
-		if (val->op == PHI) {
-			SSAValue* phiOperand1 = val->operand1;
-			SSAValue* phiOperand2 = val->operand2;
-			if (phiOperand1->op != CONST) {
-				if (!checkInterferesWith(node, phiOperand1)) {
-					node->values.insert(phiOperand1);
-					IGraphNode* phiOp1Node = findInIGraphNodes(phiOperand1);
-					for (IGraphNode* newInter : phiOp1Node->connectedTo) {
-						node->connectedTo.insert(newInter);
-					}
-					iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp1Node) - 1);
-				}
+		for (IGraphNode* connection : node->connectedTo) {
+
+			if (connection == oldConnection) {
+				node->connectedTo.insert(newConnection);
+				toEraseFrom.push_back(node);
 			}
-			if (phiOperand2->op != CONST) {
-				if (!checkInterferesWith(node, phiOperand2)) {
-					node->values.insert(phiOperand2);
-					IGraphNode* phiOp2Node = findInIGraphNodes(phiOperand2);
-					for (IGraphNode* newInter : phiOp2Node->connectedTo) {
-						node->connectedTo.insert(newInter);
+		}
+	}
+	for (IGraphNode* node : toEraseFrom) {
+		node->connectedTo.erase(oldConnection);
+	}
+}
+void SSA::coalescePhi(IGraphNode* node, std::vector<IGraphNode*>& toDelete) {
+	std::cout << "In coalesce phi" << std::endl;
+	node->visited = true;
+	SSAValue* val = node->initValue;
+	SSAValue* phiOperand1 = val->operand1;
+	SSAValue* phiOperand2 = val->operand2;
+
+
+	if (phiOperand1 != nullptr && phiOperand1->op != CONST) {
+		std::cout << "Op1 " << node->iGraphNodeRepr() << "\n" << phiOperand1->instCFGRepr() << std::endl;
+
+		if (!checkInterferesWith(node, phiOperand1)) {
+			IGraphNode* phiNode = nullptr;
+			if (phiOperand1->op == PHI) {
+				phiNode = findInIGraphNodes(phiOperand1);
+				if (phiNode == nullptr) {
+					std::cout << "Phi node is nullptr" << std::endl;
+				} else {
+					coalescePhi(phiNode, toDelete);
+					for (SSAValue* nodeVal : phiNode->values) {
+						node->values.insert(nodeVal);
 					}
-					iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp2Node) - 1);
 
 				}
+			} else {
+				// operand1 is not a phi instr
+				phiNode = findInIGraphNodes(phiOperand1);
+				for (SSAValue* nodeVal : phiNode->values) {
+					node->values.insert(nodeVal);
+				}
+			}
+			node->values.insert(phiOperand1);
+			//IGraphNode* phiOp1Node = findInIGraphNodes(phiOperand1);
+
+			if (phiNode != nullptr) {
+				for (IGraphNode* newInter : phiNode->connectedTo) {
+					node->connectedTo.insert(newInter);
+				}
+				//iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp1Node));
+				//iGraphNodes.at(findIndexOfIGraphNode(phiOp1Node)) = nullptr;
+				toDelete.push_back(phiNode);
+				addNewEdges(node, phiNode);
+				node->values.erase(val);
+			}
+		} else {
+			IGraphNode* phiOp1Node = findInIGraphNodes(phiOperand1);
+			phiOp1Node->moveTarget = node;
+		}
+	}
+	if (phiOperand2 != nullptr && phiOperand2->op != CONST) {
+		std::cout << "Op2 " << node->iGraphNodeRepr() << "\n" << phiOperand2->instCFGRepr() << std::endl;
+
+		if (!checkInterferesWith(node, phiOperand2)) {
+			std::cout << "no interference" << std::endl;
+			IGraphNode* phiNode = nullptr;
+			if (phiOperand1->op == PHI) {
+				phiNode = findInIGraphNodes(phiOperand2);
+				coalescePhi(phiNode, toDelete);
+				if (phiNode == nullptr) {
+					std::cout << "Phi node is nullptr" << std::endl;
+				}
+				for (SSAValue* nodeVal : phiNode->values) {
+					node->values.insert(nodeVal);
+				}
+			} else {
+				// operand2 of phi is not a phi
+				phiNode = findInIGraphNodes(phiOperand2);
+				for (SSAValue* nodeVal : phiNode->values) {
+					node->values.insert(nodeVal);
+				}
+			}
+			std::cout << "below conditional" << std::endl;
+			node->values.insert(phiOperand2);
+			//IGraphNode* phiOp2Node = findInIGraphNodes(phiOperand2);
+			if (phiNode != nullptr) {
+				std::cout << "node is nullptr" << std::endl;
+				for (IGraphNode* newInter : phiNode->connectedTo) {
+					node->connectedTo.insert(newInter);
+				}
+				//iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp2Node));
+				//iGraphNodes.at(findIndexOfIGraphNode(phiOp2Node)) = nullptr;
+				toDelete.push_back(phiNode);
+				addNewEdges(node, phiNode);
+				node->values.erase(val);
+			}
+		} else {
+			IGraphNode* phiOp2Node = findInIGraphNodes(phiOperand2);
+			phiOp2Node->moveTarget = node;
+		}
+	}
+}
+
+void SSA::clusterIGraphNodes() {
+	//std::vector<IGraphNode*> nodes;
+	//for (IGraphNode* node : iGraphNodes) {
+	//	SSAValue* val = node->initValue;
+	//	std::cout << val->instCFGRepr() << std::endl;
+	//	if (val->op == PHI) {
+	//		std::cout << "found phi!" << std::endl;
+
+	//		SSAValue* phiOperand1 = val->operand1;
+	//		SSAValue* phiOperand2 = val->operand2;
+	//		if (phiOperand1->op != CONST) {
+	//			std::cout << node->iGraphNodeRepr() << "\n" << phiOperand1->instCFGRepr() << std::endl;
+
+	//			if (!checkInterferesWith(node, phiOperand1)) {
+	//				node->values.insert(phiOperand1);
+	//				IGraphNode* phiOp1Node = findInIGraphNodes(phiOperand1);
+	//				for (IGraphNode* newInter : phiOp1Node->connectedTo) {
+	//					node->connectedTo.insert(newInter);
+	//				}
+	//				//iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp1Node));
+	//				//iGraphNodes.at(findIndexOfIGraphNode(phiOp1Node)) = nullptr;
+	//				nodes.push_back(phiOp1Node);
+	//				addNewEdges(node, phiOp1Node);
+	//				node->values.erase(val);
+	//			} else {
+	//				IGraphNode* phiOp1Node = findInIGraphNodes(phiOperand1);
+	//				phiOp1Node->moveTarget = node;
+	//			}
+	//		}
+	//		if (phiOperand2->op != CONST) {
+	//			std::cout << node->iGraphNodeRepr() << "\n" << phiOperand2->instCFGRepr() << std::endl;
+
+	//			if (!checkInterferesWith(node, phiOperand2)) {
+	//				node->values.insert(phiOperand2);
+	//				IGraphNode* phiOp2Node = findInIGraphNodes(phiOperand2);
+	//				for (IGraphNode* newInter : phiOp2Node->connectedTo) {
+	//					node->connectedTo.insert(newInter);
+	//				}
+	//				//iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp2Node));
+	//				//iGraphNodes.at(findIndexOfIGraphNode(phiOp2Node)) = nullptr;
+	//				nodes.push_back(phiOp2Node);
+	//				addNewEdges(node, phiOp2Node);
+	//				node->values.erase(val);
+	//			} else {
+	//				IGraphNode* phiOp2Node = findInIGraphNodes(phiOperand2);
+	//				phiOp2Node->moveTarget = node;
+	//			}
+	//		}
+	//	}
+	//}
+	std::vector<IGraphNode*> toDelete;
+	for (IGraphNode* node : iGraphNodes) {
+		SSAValue* val = node->initValue;
+		if (val->op == PHI && !node->visited) {
+			coalescePhi(node, toDelete);
+			std::cout << "finished coalesce phi" << std::endl;
+		}
+	}
+	for (auto node : toDelete) {
+		int index = findIndexOfIGraphNode(node);
+		if (index >= 0) {
+			iGraphNodes.erase(iGraphNodes.begin() + index);
+		}
+	}
+
+}
+
+std::string IGraphNode::iGraphNodeRepr() {
+	std::string output = std::to_string(id) + "[shape=record, style=filled,colorscheme=pastel19,fillcolor=" + std::to_string(color) + ",label=\"< b > " + std::to_string(id) + "| {Init Value : " + initValue->instCFGRepr() + " | ";
+	output += "Values |";
+	for (SSAValue* val : values) {
+		output += val->instCFGRepr() + "|";
+	}
+	output += "Connected to |";
+	for (IGraphNode* node : connectedTo) {
+		output += " " + std::to_string(node->id) + ",";
+	}
+	output.pop_back();
+	if (moveTarget != nullptr) {
+		output += "| Move Target |" + std::to_string(moveTarget->id);
+	}
+	output += "| Color | " + std::to_string(color);
+	output += "}\"]\n";
+	for (IGraphNode* node : connectedTo) {
+		output += std::to_string(id) + "--" + std::to_string(node->id) + "[arrowhead=none]\n";
+	}
+	return output;
+}
+
+void SSA::printClusteredIGraph() {
+	std::cout << "strict graph clusteredIGraph {" << std::endl;
+	for (IGraphNode* node : iGraphNodes) {
+		if (node != nullptr) {
+			std::cout << node->iGraphNodeRepr() << std::endl;
+
+		}
+	}
+	std::cout << "}" << std::endl;
+}
+
+IGraphNode* SSA::pickNode(std::vector<IGraphNode*> nodes) {
+	int numRegisters = 5;
+	IGraphNode* minNode = nullptr;
+	int minNeighbors = 100;
+	for (auto node : nodes) {
+		int numNeighbors = node->connectedTo.size();
+		if (numNeighbors < minNeighbors) {
+			minNode = node;
+			minNeighbors = numNeighbors;
+		}
+		if (numNeighbors < numRegisters) {
+			return node;
+		}
+	}
+	std::cout << "At end of pickNode" << std::endl;
+	return minNode;
+}
+
+int SSA::pickColor(IGraphNode* node) {
+	int possibleColors[5] = { 1, 2, 3, 4, 5 };
+	std::vector<int> neighborColors;
+	for (IGraphNode* connection : node->connectedTo) {
+		if (connection != nullptr && connection->color != -1) {
+			for (int i = 0; i < 5; i++) {
+				neighborColors.push_back(connection->color);
+				if (possibleColors[i] == connection->color) {
+					possibleColors[i] = 0;
+				}
+			}
+		}
+	}
+	bool colorExists = false;
+	for (int color : possibleColors) {
+		if (color != 0) {
+			colorExists = true;
+			return color;
+		}
+	}
+	if (!colorExists) {
+		if (virtualRegColors.size() == 0) {
+			virtualRegColors.push_back(6);
+		}
+		bool foundSuitableVRegColor = false;
+		for (int vRegColor : virtualRegColors) {
+			bool noNeighborSharesColor = true;
+			for (int neighborColor : neighborColors) {
+				if (vRegColor == neighborColor) {
+					noNeighborSharesColor = false;
+				}
+			}
+			if (noNeighborSharesColor) {
+				foundSuitableVRegColor = true;
+				return vRegColor;
+				break;
+			}
+		}
+		if (!foundSuitableVRegColor) {
+			int newRegColor = virtualRegColors.back() + 1;
+			virtualRegColors.push_back(newRegColor);
+			return newRegColor;
+		}
+	}
+	std::cout << "Pick colors" << std::endl;
+}
+
+void SSA::colorGraph() {
+	std::cout << "Performing Graph Coloring" << std::endl;
+
+	int numRegisters = 5;
+	IGraphNode* node = pickNode(iGraphNodes);
+	if (node == nullptr) {
+		return;
+	}
+	int index = findIndexOfIGraphNode(node);
+	std::cout << "index is " << index << std::endl;
+	if (iGraphNodes.size() != 0 && index >= 0) {
+		iGraphNodes.erase(iGraphNodes.begin() + index);
+	}
+	std::vector<IGraphNode*> addBackTo;
+	//if (node != nullptr) {
+	for (auto editNode : node->connectedTo) {
+		if (editNode != nullptr) {
+			addBackTo.push_back(editNode);
+			editNode->connectedTo.erase(node);
+		}
+	}
+	//}
+	if (iGraphNodes.size() != 0) {
+
+		colorGraph();
+	} else {
+		std::cout << "size is 0" << std::endl;
+	}
+	//if (node != nullptr) {
+	iGraphNodes.push_back(node);
+
+	//}
+	for (auto editNode : addBackTo) {
+		if (editNode != nullptr) {
+			editNode->connectedTo.insert(node);
+		}
+	}
+	//if (node != nullptr) {
+	node->color = pickColor(node);
+
+	//}
+	return;
+
+
+}
+
+void SSA::generateRegisters() {
+	for (auto node : iGraphNodes) {
+		try {
+			Register* reg = registers.at(node->color);
+			for (auto val : node->values) {
+				reg->values.insert(val);
+			}
+			reg->values.insert(node->initValue);
+
+		}
+		catch (std::out_of_range& oor) {
+			Register* newReg = new Register();
+			newReg->id = node->color;
+			if (node->color > 5) {
+				newReg->isVirtual = true;
+			}
+			for (auto val : node->values) {
+				newReg->values.insert(val);
+			}
+			newReg->values.insert(node->initValue);
+			registers.insert({ node->color, newReg });
+		}
+	}
+}
+
+void SSA::printRegisters() {
+	std::cout << "digraph regs {" << std::endl;
+	for (auto kv : registers) {
+		Register* reg = kv.second;
+		std::string outString;
+		outString = std::to_string(reg->id) + "[shape = record, style = filled, colorscheme = pastel19, fillcolor =" + std::to_string(reg->id) + ", label = \"<b>" + std::to_string(reg->id) + "|{";
+		for (auto val : reg->values) {
+			outString += val->instCFGRepr() + "|";
+		}
+		outString.pop_back();
+		outString += "}\"];";
+		std::cout << outString << std::endl;
+	}
+	std::cout << "}" << std::endl;
+}
+
+void SSA::setRegisters() {
+	for (auto kv : registers) {
+		for (SSAValue* val : kv.second->values) {
+			val->regNum = kv.first;
+		}
+	}
+	for (auto node : iGraphNodes) {
+		IGraphNode* moveTarget = node->moveTarget;
+		if (moveTarget != nullptr) {
+			for (SSAValue* val : node->values) {
+				val->regToMoveTo = moveTarget->initValue->regNum;
 			}
 		}
 	}
 }
 
-std::string IGraphNode::iGraphNodeRepr() {
-	
-}
-void SSA::printClusteredIGraph() {
+void SSA::cleanInstList() {
+	// have to add move instructions in this function 
+	// have to adjust basic block things
+	int labelCount = 0;
+	SSAValue* iter = instList;
+
+	while (iter != nullptr) {
+		if (iter->op == PHI) {
+			SSAValue* phiOperand1 = iter->operand1;
+			SSAValue* phiOperand2 = iter->operand2;
+			if (phiOperand1->regToMoveTo != 0 || phiOperand1->op == CONST) {
+				SSAValue* moveInstr;
+				BasicBlock* bbToAddMoveIn;
+				if (phiOperand1->op == CONST) {
+					if (iter->containingBB->branchFrom != nullptr && iter->containingBB->branchFrom->conditionalBlockType == "ifThenElse-Then") {
+						bbToAddMoveIn = iter->containingBB->branchFrom;
+					} else if (iter->containingBB->fallThroughFrom != nullptr && iter->containingBB->fallThroughFrom->conditionalBlockType == "ifThen-Then") {
+						bbToAddMoveIn = iter->containingBB->fallThroughFrom;
+					} else {
+						bbToAddMoveIn = iter->containingBB;
+					}
+					moveInstr = SSACreateConstMove(phiOperand1, iter->regNum);
+				} else {
+					bbToAddMoveIn = phiOperand1->containingBB;
+					moveInstr = SSACreateMove(phiOperand1->regNum, phiOperand1->regToMoveTo);
+
+				}
+				if (bbToAddMoveIn != iter->containingBB) {
+					SSAValue* currentTail = bbToAddMoveIn->tail;
+					SSAValue* currentTailNext = currentTail->next;
+					currentTail->next = moveInstr;
+					moveInstr->prev = currentTail;
+					moveInstr->next = currentTailNext;
+					currentTailNext->prev = moveInstr;
+					bbToAddMoveIn->tail = moveInstr;
+				} else {
+					SSAValue* whileJoinIter = bbToAddMoveIn->tail;
+					while (whileJoinIter != bbToAddMoveIn->head->prev) {
+						// need to check when nop is first instruction of BB
+						if (whileJoinIter->op == NOP) {
+							SSAValue* nopPrev = whileJoinIter->prev;
+							nopPrev->next = moveInstr;
+							moveInstr->prev = nopPrev;
+
+							moveInstr->next = whileJoinIter;
+							whileJoinIter->prev = moveInstr;
+							break;
+						}
+						whileJoinIter = whileJoinIter->prev;
+					}
+					if (whileJoinIter == bbToAddMoveIn->head) {
+						bbToAddMoveIn->head = moveInstr;
+					}
+
+				}
+
+			}
+			if (phiOperand2->regToMoveTo != 0) {
+				BasicBlock* bbToAddMoveIn = phiOperand2->containingBB;
+				SSAValue* currentTail = bbToAddMoveIn->tail;
+				SSAValue* currentTailNext = currentTail->next;
+				SSAValue* moveInstr = SSACreateMove(phiOperand2->regNum, phiOperand2->regToMoveTo);
+				if (false) {
+					SSAValue* currentTailPrev = currentTail->prev;
+					currentTailPrev->next = moveInstr;
+					moveInstr->prev = currentTailPrev;
+					moveInstr->next = currentTail;
+					currentTail->prev = moveInstr;
+				} else {
+					currentTail->next = moveInstr;
+					moveInstr->prev = currentTail;
+					moveInstr->next = currentTailNext;
+					currentTailNext->prev = moveInstr;
+
+				}
+				if (bbToAddMoveIn->splitType == "if") {
+					BasicBlock* moveBB = new BasicBlock();
+					moveBB->id = maxBlockID++;
+					moveBB->funcName = funcName;
+					basicBlocks.push_back(moveBB);
+					//moveBB->head = moveInstr;
+					//moveBB->tail = moveInstr;
+					BasicBlock* joinBlock = bbToAddMoveIn->branch;
+					if (moveInstr->prev->op >= BNE && moveInstr->prev->op <= BGT) {
+						SSAValue* finalTarget = moveInstr->prev->operand2;
+						SSAValue* newNop = SSACreateNop();
+						newNop->id = maxID++;
+						moveInstr->prev->operand2 = newNop;
+						newNop->label = funcName + std::to_string(labelCount);
+
+						moveBB->head = newNop;
+						SSAValue* braInstr = new SSAValue();
+						braInstr->op = BRA;
+						braInstr->id = maxID++;
+						braInstr->operand1 = finalTarget;
+						moveBB->tail = braInstr;
+						
+						SSAValue* moveInstrPrev = moveInstr->prev;
+						SSAValue* moveInstrNext = moveInstr->next;
+						moveInstrPrev->next = newNop;
+						newNop->prev = moveInstrPrev;
+
+						newNop->next = moveInstr;
+						moveInstr->prev = newNop;
+						
+
+						moveInstr->next = braInstr;
+						braInstr->prev = moveInstr;
+
+						braInstr->next = moveInstrNext;
+						moveInstrNext->prev = braInstr;
+						
+
+						bbToAddMoveIn->branch = moveBB;
+						moveBB->branchFrom = bbToAddMoveIn;
+						moveBB->branch = joinBlock;
+						joinBlock->branchFrom = moveBB;
+						
+
+					} else {
+						// bra instr
+					}
+				} else {
+					bbToAddMoveIn->tail = moveInstr;
+				}
+			}
+			
+
+			SSAValue* iterPrev = iter->prev;
+			SSAValue* iterNext = iter->next;
+			BasicBlock* containingBB = iter->containingBB;
+			if (iter == containingBB->head) {
+				if (iterNext != nullptr) {
+					if (iterNext->containingBB == containingBB) {
+						containingBB->head = iterNext;
+					} else {
+						containingBB->head = nullptr;
+					}
+				} else {
+					containingBB->head = nullptr;
+					containingBB->tail = nullptr;
+				}
+			}
+			
+
+			if (iter == containingBB->tail) {
+				if (iterNext != nullptr) {
+					if (iterNext->containingBB == containingBB) {
+						containingBB->tail = iterNext;
+					} else {
+						if (iterPrev->containingBB == containingBB) {
+							containingBB->tail = iterPrev;
+						} else {
+							containingBB->tail = nullptr;
+							containingBB->head = nullptr;
+						}
+					}
+				} else {
+					if (iterPrev->containingBB == containingBB) {
+						containingBB->tail = iterPrev;
+					} else {
+						containingBB->tail = nullptr;
+						containingBB->head = nullptr;
+					}
+				}
+			}
+			
+
+			if (iterNext != nullptr) {
+				iterPrev->next = iterNext;
+				iterNext->prev = iterPrev;
+			} else {
+				iterPrev->next = nullptr;
+			}
+			
+
+		}
+		if (iter->deadCode) {
+			SSAValue* iterPrev = iter->prev;
+			SSAValue* iterNext = iter->next;
+			BasicBlock* containingBB = iter->containingBB;
+			if (iter == containingBB->head) {
+				if (iterNext != nullptr) {
+					if (iterNext->containingBB == containingBB) {
+						containingBB->head = iterNext;
+					} else {
+						containingBB->head = nullptr;
+					}
+				} else {
+					containingBB->head = nullptr;
+					containingBB->tail = nullptr;
+				}
+			}
+			if (iter == containingBB->tail) {
+				if (iterNext != nullptr) {
+					if (iterNext->containingBB == containingBB) {
+						containingBB->tail = iterNext;
+					} else {
+						if (iterPrev->containingBB == containingBB) {
+							containingBB->tail = iterPrev;
+						} else {
+							containingBB->tail = nullptr;
+							containingBB->head = nullptr;
+						}
+					}
+				} else {
+					if (iterPrev->containingBB == containingBB) {
+						containingBB->tail = iterPrev;
+					} else {
+						containingBB->tail = nullptr;
+						containingBB->head = nullptr;
+					}
+				}
+			}
+			if (iterNext != nullptr) {
+				iterPrev->next = iterNext;
+				iterNext->prev = iterPrev;
+			} else {
+				iterPrev->next = nullptr;
+			}
+
+
+		}
+		if (iter != nullptr && iter->op == BRA) {
+			iter->operand1->label = funcName + std::to_string(labelCount);
+			labelCount++;
+		}
+		if (iter != nullptr && iter->op >= BNE && iter->op <= BGT) {
+			iter->operand2->label = funcName + std::to_string(labelCount);
+			labelCount++;
+		}
+		if (iter->op == NOP) {
+			if (iter->containingBB->loop != nullptr) {
+				// nop at top of while body
+				
+				SSAValue* nopPrevInst = iter->prev;
+				SSAValue* nopNextInst = iter->next;
+				nopPrevInst->next = nopNextInst;
+				nopNextInst->prev = nopPrevInst;
+				if (iter->containingBB == nopNextInst->containingBB) {
+					iter->containingBB->head = nopNextInst;
+				} else {
+					iter->containingBB->head = nullptr;
+					iter->containingBB->tail = nullptr;
+				}
+			}
+		}
+
+		iter = iter->next;
+	}
 
 }

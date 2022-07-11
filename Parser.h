@@ -44,6 +44,7 @@ class Parser {
 		std::string outputSSA();
 		void printSSA();
 		void printDotLang();
+		void printRegDotLang();
 
 		void reset();
 

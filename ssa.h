@@ -35,9 +35,12 @@ enum opcode {
 	writeNL = 22,   // write new line
 	argAssign = 23,
 	call = 24,
-	ret = 25
+	ret = 25,
+	move = 26,
+	moveConst = 27
 };
 
+class BasicBlock;
 
 class SSAValue {
     public:
@@ -63,11 +66,22 @@ class SSAValue {
 
 		bool deadCode;
 
+		int regNum;
+
+		int regToMoveFrom;
+		int regToMoveTo;
+
+		
+
+		std::string label;
+		BasicBlock* containingBB;
+
 		void setOpNames(std::string operand1Name, std::string operand2Name);
 
 		// ssa value debugging functions
 		std::string getTextForEnum(int enumVal);
 		std::string formatOperand(SSAValue* operand);
+		std::string formatRegOperand(SSAValue* operand);
 
 		std::string getType();
 		std::string getNameType();
@@ -76,7 +90,10 @@ class SSAValue {
         void instRepr(); // print representation of each ssa value
 		void instReprWNames();
 		std::string instCFGRepr();
+		std::string instCFGRegRepr();
 		std::string elimRepr();
+		std::string moveRepr();
+		std::string moveConstRepr();
 
 
 
@@ -84,7 +101,7 @@ class SSAValue {
     private:
         //hash_map will be implemented, details still needed
         //std::unordered_map<>
-		std::string opcodeEnumStrings[26] = {
+		std::string opcodeEnumStrings[28] = {
 			"NEG",        
 			"ADDOP",        
 			"SUBOP",        
@@ -110,7 +127,9 @@ class SSAValue {
 			"writeNL",
 			"argAssign",
 			"call",
-			"return"
+			"return",
+			"move",
+			"moveConst"
 		};
 
 
@@ -121,7 +140,7 @@ class SSAValue {
 class BasicBlock {
 	// we want a map between branch-to inst ids and branch bbs
 	public:
-		std::string bbRepr();
+		std::string bbRepr(bool printRegs);
 		SSAValue* getHead();
 		SSAValue* getTail();
 		int getID();
@@ -162,13 +181,23 @@ class BasicBlock {
 class IGraphNode {
 	public:
 		IGraphNode(SSAValue* val, int nodeID);
-		SSAValue* singleValue;
+		SSAValue* initValue;
 		std::set<SSAValue*> values;
 		std::set<IGraphNode*> connectedTo;
 		std::string iGraphNodeRepr();
 		int id;
+		IGraphNode* moveTarget;
+		bool visited;
+		int color;
 
+};
 
+class Register {
+	public:
+		int id;
+		bool isVirtual;
+		std::set<SSAValue*> values;
+		int offset;
 };
 
 class SSA {
@@ -183,8 +212,8 @@ class SSA {
 		SSAValue* SSACreateNop();
 		SSAValue* SSACreateArgAssign(std::string argName);
 		SSAValue* SSACreateCall(std::string funcName, std::vector<SSAValue*> cArgs, std::vector<std::string> fParams);
-
-
+		SSAValue* SSACreateMove(int currentReg, int moveToReg);
+		SSAValue* SSACreateConstMove(SSAValue* constInstr, int moveToReg);
 		void updateNop(SSAValue* nopInst);
 		
 		int getTailID();
@@ -218,7 +247,7 @@ class SSA {
 		void printSymTable();
 		void printConstTable();
 		void printVarDeclList();
-		std::string reprBasicBlocks(BasicBlock* head);
+		std::string reprBasicBlocks(BasicBlock* head, bool printRegs);
 
 
 	    // basic block functions
@@ -248,7 +277,7 @@ class SSA {
 		bool getInWhile();
 		void setInWhile(bool value);
 		
-		void gen();
+		void gen(bool printRegs);
 		//void generateDotLang();
 
 		void reset();
@@ -263,6 +292,17 @@ class SSA {
 		bool checkInterferesWith(IGraphNode* node, SSAValue* instr);
 		int findIndexOfIGraphNode(IGraphNode* toFindNode);
 		void printClusteredIGraph();
+		void addNewEdges(IGraphNode* newConnection, IGraphNode* oldConnection);
+		void coalescePhi(IGraphNode* node, std::vector<IGraphNode*>& toDelete);
+		IGraphNode* pickNode(std::vector<IGraphNode*> nodes);
+		void colorGraph();
+		int pickColor(IGraphNode* node);
+		void generateRegisters();
+		void printRegisters();
+		void setRegisters();
+		void cleanInstList();
+
+
     private:
         int maxID; // current number of SSAValues created
 		int numConsts;
@@ -296,7 +336,8 @@ class SSA {
 
 		std::unordered_map<SSAValue*, std::set<SSAValue*>> iGraph;
 		std::vector<IGraphNode*> iGraphNodes;
-
+		std::vector<int> virtualRegColors;
+		std::unordered_map<int, Register*> registers;
 
 
         
