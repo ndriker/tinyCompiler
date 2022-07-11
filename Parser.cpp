@@ -94,7 +94,6 @@ std::tuple<SSAValue*, std::string> Parser::factor() {
 	if (sym == IDENT) {
 		name = getCurrentValue();
 		left = varRef();
-		std::cout << "Name from factor " << name << std::endl;
 	}
 	else if (sym == NUMBER) {
 		std::string numStr = getCurrentValue();
@@ -347,7 +346,6 @@ SSAValue* Parser::funcCall() {
 				} else if (ident == "OutputNum") {
 					SSAValue* callRes = ssa->SSACreate(write, argVals.at(0));
 					callRes->isVoidCall = true;
-					std::cout << "JUST SET isVoidCall to TRUE for write" << std::endl;
 				} else {
 					SSAValue* callRes = ssa->SSACreateCall(ident, argVals, formalParams);
 					callRes->isVoidCall = true;
@@ -501,13 +499,7 @@ void Parser::ifStatement() {
 	} else {	
 		error("If statement must have 'if'");
 	}
-	//std::cout << "TAIL IS " << joinBlock->tail->instCFGRepr() << std::endl;
-	//if (joinBlock->tail->op == BRA) {
 
-	//	ssa->connectBR(joinBlock, savedJoinBlock);
-	//} else {
-	//	ssa->connectFT(joinBlock, savedJoinBlock);
-	//}
 	if (savedJoinBlock != nullptr && savedJoinBlock->joinType != "while") {
 		if (savedJoinBlock->ifThenJoinBlock == true) {
 			// outer conditional is if then else
@@ -524,7 +516,6 @@ void Parser::ifStatement() {
 
 		} else {
 			// outer condition is if then
-			std::cout << "outer condition is just if then " << ssa->getContext()->getID() << std::endl;
 			ssa->connectFT(joinBlock, savedJoinBlock);
 			joinBlock->conditionalBlockType = "ifThen-Then";
 			savedJoinBlock->alreadyConnected = true;
@@ -586,7 +577,6 @@ void Parser::whileStatement() {
 			
 			ssa->setContext(joinBlock, true);
 			ssa->updateNop(joinBlockHead);
-			std::cout << joinBlockHead->instCFGRepr() << std::endl;
 
 			SSAValue* joinBlockTail = joinBlockHead;
 			                   // argName         // prevId       // changeToID
@@ -607,7 +597,6 @@ void Parser::whileStatement() {
 			SSAValue* cmpInst = branchInst->prev;
 			SSAValue* cmpLeftOp = cmpInst->operand1;
 			SSAValue* cmpRightOp = cmpInst->operand2;
-			//std::cout << "cmp left op ";
 			//cmpLeftOp->instRepr();
 			try {
 				std::string cmpLeftName = cmpInst->op1Name;
@@ -629,14 +618,6 @@ void Parser::whileStatement() {
 			catch (std::out_of_range& oor) {
 				// intentionally left blank
 			}
-
-
-			//try {
-			//	cmpInst->operand1 = idChanges.at(cmpInst->operand1);
-			//} catch (std::out_of_range& oor) {
-			//	std::cout << "Most likely infinite loop, check that you are modifying the loop control variable." << std::endl;
-			//	throw std::logic_error("Most likely infinite loop, check that you are modifying the loop control variable.");
-			//}
 
 
 			aboveCmpInst->next = joinBlockHead;
@@ -734,8 +715,6 @@ void Parser::whileStatement() {
 
 			SSAValue* iter = joinBlockHead->next;
 			while (iter != joinBlockTail->next) {
-				std::cout << "join block tail " << joinBlockTail->instCFGRepr() << std::endl;
-				std::cout << "renaming while phis " << iter->instCFGRepr() << std::endl;
 				try {
 					SSAValue* replaceWith = instReplacements.at(iter->operand1);
 					iter->operand1 = replaceWith;
@@ -786,7 +765,6 @@ void Parser::whileStatement() {
 
 		} else {
 			// outer condition is if then
-			std::cout << "outer condition is just if then " << ssa->getContext()->getID() << std::endl;
 			ssa->connectFT(followBlock, savedJoinBlock);
 			savedJoinBlock->alreadyConnected = true;
 		}
@@ -918,7 +896,6 @@ void Parser::funcDecl() {
 			funcDescriptors.insert({ ident, newFunc });
 
 
-			std::cout << "before next() " << std::endl;
 			printItem(getTextForEnum(sym));
 			printItem(getTextForEnum(sym));
 
@@ -945,7 +922,6 @@ void Parser::funcDecl() {
 
 std::vector<std::string> Parser::formalParam() {
 	startPrintBlock("Formal Parameters");
-	std::cout << "sym is in fp " << getTextForEnum(sym) << std::endl;
 	std::vector<std::string> formalParams;
 	if (sym == L_PAREN) {
 		printItem(getTextForEnum(sym));
@@ -1094,29 +1070,30 @@ void Parser::printSSA() {
 		std::cout << "// " << kv.first << ": " << std::endl;
 		std::cout << std::endl;
 		ssa->printSSA();
-		std::cout << std::endl;
-		ssa->printSymTable();
-		std::cout << std::endl;
-		ssa->printConstTable();
-		std::cout << std::endl;
-		ssa->printVarDeclList();
-		std::cout << std::endl;
+		//std::cout << std::endl;
+		//ssa->printSymTable();
+		//std::cout << std::endl;
+		//ssa->printConstTable();
+		//std::cout << std::endl;
+		//ssa->printVarDeclList();
+		//std::cout << std::endl;
 		//ssa->generateLiveRanges();
-		std::cout << "Basic Block Traversal: " << std::endl;
+		//std::cout << "Basic Block Traversal: " << std::endl;
 		ssa->traverseBasicBlocks(ssa->getBBTail());
-		ssa->printLiveRanges();
+		//ssa->printLiveRanges();
 		std::cout << std::endl;
 		ssa->generateIGraphNodes();
 		ssa->clusterIGraphNodes();
-		ssa->printClusteredIGraph();
+		//ssa->printClusteredIGraph();
 		ssa->colorGraph();
-		ssa->printClusteredIGraph();
+		//ssa->printClusteredIGraph();
 		ssa->generateRegisters();
-		ssa->printRegisters();
-		std::cout << std::endl;
-		printRegDotLang();
+		//ssa->printRegisters();
 		std::cout << std::endl;
 	}
+	std::cout << "Full CFG with Regs\n\n" << std::endl;
+	printRegDotLang();
+	std::cout << std::endl;
 
 
 

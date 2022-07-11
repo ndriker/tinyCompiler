@@ -1,21 +1,37 @@
 main 
-    var a, b, c;
-{
-    let a <- a + 1;
-    while a < b do
-        let a <- 2;
-        if a < b then
-            let a <- a + 1;
+
+var alpha,beta,gamma;
+var v0, v1, v2;
+
+function f1 ( arg0, arg1, arg2 );
+    var fvar0;
+    var fvar1;
+    {
+        if arg0 > 0
+        then
+            let fvar0 <- arg1 / 2 + arg2;
         else
-            let a <- b + 1;
+            let fvar0 <- 0;
         fi;
+        return fvar0;
+    };
+
+{
+    let v0 <- 5;
+    let v1 <- 1;
+    while v0 > 0
+    do
+        let v0 <- v0 - 1;
+        let v1 <- v1 * 2;
     od;
-
-
-    call OutputNum(a);
+    call OutputNum(call f1(1,v1,1));
 }.
 
 /*
+
+
+
+
 main 
     var a, b, c;
 {

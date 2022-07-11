@@ -339,8 +339,6 @@ class SSA {
 		std::vector<int> virtualRegColors;
 		std::unordered_map<int, Register*> registers;
 
-
-        
 };
 
 

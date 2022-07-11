@@ -35,7 +35,7 @@ std::string SSAValue::callRepr() {
 		output = "R" + std::to_string(regNum) + "= call " + argName + "(";
 	} else {
 
-		output = "call " + argName + "(";
+		output = std::to_string(id) + ": call " + argName + "(";
 	}
 	for (int i = 0; i < formalParams.size(); i++) {
 		SSAValue* callArg = callArgs.at(i);
@@ -208,7 +208,6 @@ SSAValue* SSA::SSACreate(opcode operation, SSAValue* x, SSAValue* y) {
 
 		SSAValue* iter = prevDomWithOpcode;
 		while (iter != nullptr) {
-			std::cout << "SSACreate prevDomWithOpcode" << iter->instCFGRepr() << std::endl;
 			if (!inWhile && iter->operand1 == x && iter->operand2 == y) {
 
 				// found common subexpression
@@ -296,10 +295,8 @@ SSAValue* SSA::SSACreateCall(std::string funcName, std::vector<SSAValue*> cArgs,
 }
 
 SSAValue* SSA::SSACreateConst(int constVal) {
-	std::cout << "Creating const" << std::endl;
 	SSAValue* val = findConst(constVal);
 	if (val == nullptr) {
-		std::cout << "Val was nullptr" << std::endl;
 		SSAValue* ssaConst = new SSAValue();
 		ssaConst->op = CONST;
 		numConsts += 1;
@@ -337,7 +334,6 @@ SSAValue* SSA::findPrevDomWithOpcode(opcode operation) {
 	for (int i = inOrder.size() - 1; i >= 0; i--) {
 
 		std::vector<SSAValue*> inner = inOrder.at(i);
-		//std::cout << operation << std::endl;
 		for (int j = inner.size() - 1; j >= 0; j--) {
 			SSAValue* item = inner.at(j);
 			if (item->op == operation) {
@@ -474,12 +470,7 @@ void SSA::addConst(int constVal, SSAValue* constSSAVal) {
 }
 
 SSAValue* SSA::findConst(int constVal) {
-	std::cout << "Const Table" << std::endl;
-	for (auto kv : constTable) {
-		std::cout << kv.first << " " << kv.second->instCFGRepr() << std::endl;
-	}
-	std::cout << "end of const table" << std::endl;
-	std::cout << "val is " << constVal << std::endl;
+
 	try {
 		SSAValue* val = constTable.at(constVal);
 		return val;
@@ -631,7 +622,6 @@ void SSA::addInstToConstBB(SSAValue* inst) {
 void SSA::connectFT(BasicBlock* from, BasicBlock* to) {
 
 	if (context->fallThrough != nullptr) {
-		std::cout << "FT" << context->id << " " << context->fallThrough->id << "BAD" << std::endl;
 	}
 	if (from->fallThrough == nullptr) {
 
@@ -642,7 +632,7 @@ void SSA::connectFT(BasicBlock* from, BasicBlock* to) {
 
 void SSA::connectBR(BasicBlock* from, BasicBlock* to) {
 	if (context->branch != nullptr) {
-		std::cout << "BR" << context->branch->id << "BAD" << std::endl;
+
 	}
 	if (from != nullptr && from->branch == nullptr) {
 		from->branch = to;
@@ -781,10 +771,6 @@ void SSA::generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, st
 	int nopEncounteredCount = 0;
 	while (iter != stopAt && iter->op != CONST) {
 		
-		for (SSAValue* val : liveRanges) {
-			std::cout << val->id << ", ";
-		}
-		std::cout << std::endl;
 		if (iter->op == PHI) {
 			phis.push_back(iter);
 		}
@@ -808,7 +794,7 @@ void SSA::generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, st
 			liveRanges.erase(iter);
 		} else {
 			if ( (iter->op >= BRA && iter->op <= BGT) || 
-				 (iter->op == write) || (iter->op == writeNL)) {
+				 (iter->op == write) || (iter->op == writeNL) || (iter->op == ret) ){
 
 			} else {
 				deadCode = true;
@@ -924,7 +910,6 @@ void SSA::traverseBasicBlocks(BasicBlock* startBlock) {
 		BasicBlock* currentBlock = q.front();
 		q.pop();
 		if (!currentBlock->visited) {
-			std::cout << currentBlock->getID() << std::endl;
 			handleTraverseStep(currentBlock);
 		}
 		if (! (currentBlock->joinType == "while") && !(currentBlock->splitType == "if") ) {
@@ -956,8 +941,7 @@ void SSA::traverseBasicBlocks(BasicBlock* startBlock) {
 				BasicBlock* ftBlock = currentBlock->fallThroughFrom;
 				BasicBlock* brBlock = currentBlock->branchFrom;
 				if (ftBlock != nullptr && ftBlock->id != -1) {
-					std::cout << "In if split" << std::endl;
-					std::cout << "Adding ftfrom block " << ftBlock->id << " from the " << currentBlock->id << " block" << std::endl;
+
 					q.push(ftBlock);
 					ftBlock->numVisits += 1;
 				} if (brBlock != nullptr && brBlock->id != -1) {
@@ -968,8 +952,6 @@ void SSA::traverseBasicBlocks(BasicBlock* startBlock) {
 				currentBlock->visited = true;
 
 
-			} else {
-				std::cout << "split type is if but num visits is NOT 2 fuckers!!" << std::endl;
 			}
 
 		} else {
@@ -1034,7 +1016,6 @@ BasicBlock* SSA::getBBTail() {
 void BasicBlock::unionLiveRanges(BasicBlock* toUnionFrom, std::string sideOfPhi) {
 	if (toUnionFrom != nullptr) {
 		for (SSAValue* val : toUnionFrom->liveRanges) {
-			std::cout << val->id << std::endl;
 			liveRanges.insert(val);
 		}
 		for (SSAValue* phi : toUnionFrom->phis) {
@@ -1060,7 +1041,6 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 			// at the end of else in if-then-else struct
 			bb->unionLiveRanges(bb->fallThrough, "right");
 		} else {
-			std::cout << "inside of this condition" << std::endl;
 			bb->unionLiveRanges(bb->fallThrough, "left");
 			bb->unionLiveRanges(bb->branch, "right");
 		}
@@ -1075,7 +1055,6 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 
 	} else if (bb->conditionalBlockType == "ifThen-Then") {
 		if (bb->branch == nullptr && bb->loop == nullptr) {
-			std::cout << "in this case" << std::endl;
 			// at the end of then in if-then struct
 			bb->unionLiveRanges(bb->fallThrough, "left");
 		} else {
@@ -1442,8 +1421,6 @@ void SSA::colorGraph() {
 	if (iGraphNodes.size() != 0) {
 
 		colorGraph();
-	} else {
-		std::cout << "size is 0" << std::endl;
 	}
 	iGraphNodes.push_back(node);
 
