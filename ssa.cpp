@@ -1144,6 +1144,7 @@ void SSA::generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, st
 			for (SSAValue* phi : phis) {
 				liveRanges.insert(phi->operand1);
 			}
+			phis = std::vector<SSAValue*>();
 		}
 		bool deadCode = false;
 		if (liveRanges.find(iter) != liveRanges.end()) {
@@ -1555,6 +1556,7 @@ BasicBlock* SSA::getBBTail() {
 void BasicBlock::unionLiveRanges(BasicBlock* toUnionFrom, std::string sideOfPhi) {
 	if (toUnionFrom != nullptr) {
 		for (SSAValue* val : toUnionFrom->liveRanges) {
+			std::cout << val->id << std::endl;
 			liveRanges.insert(val);
 		}
 		for (SSAValue* phi : toUnionFrom->phis) {
@@ -1596,6 +1598,7 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 
 	} else if (bb->conditionalBlockType == "ifThen-Then") {
 		if (bb->branch == nullptr && bb->loop == nullptr) {
+			std::cout << "in this case" << std::endl;
 			// at the end of then in if-then struct
 			bb->unionLiveRanges(bb->fallThrough, "left");
 		} else {
@@ -1615,7 +1618,25 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 			// need to handle cond with only then block here
 			if (bb->splitType == "if") {
 				if (bb->branch->joinType == "while") {
-					bb->unionLiveRanges(bb->branch, "left");
+					if (bb->fallThrough->conditionalBlockType == "ifThen-Then") {
+						std::cout << "if split found" << std::endl;
+						std::cout << "printing items in live set" << std::endl;
+						for (SSAValue* lrVal : bb->liveRanges) {
+							std::cout << lrVal->id << ", ";
+						}
+						std::cout << std::endl;
+
+						bb->unionLiveRanges(bb->branch, "right");
+						std::cout << "printing items in live set" << std::endl;
+						for (SSAValue* lrVal : bb->liveRanges) {
+							std::cout << lrVal->id << ", ";
+						}
+						std::cout << std::endl;
+
+					} else {
+						bb->unionLiveRanges(bb->branch, "left");
+
+					}
 				} else {
 					bb->unionLiveRanges(bb->branch, "right"); // suss
 
@@ -2129,7 +2150,55 @@ void SSA::cleanInstList() {
 	SSAValue* iter = instList;
 
 	while (iter != nullptr) {
-		if (iter->op == PHI) {
+
+		if (iter->deadCode) {
+			SSAValue* iterPrev = iter->prev;
+			SSAValue* iterNext = iter->next;
+			BasicBlock* containingBB = iter->containingBB;
+			if (iter == containingBB->head) {
+				if (iterNext != nullptr) {
+					if (iterNext->containingBB == containingBB) {
+						containingBB->head = iterNext;
+					} else {
+						containingBB->head = nullptr;
+					}
+				} else {
+					containingBB->head = nullptr;
+					containingBB->tail = nullptr;
+				}
+			}
+			if (iter == containingBB->tail) {
+				if (iterNext != nullptr) {
+					if (iterNext->containingBB == containingBB) {
+						containingBB->tail = iterNext;
+					} else {
+						if (iterPrev->containingBB == containingBB) {
+							containingBB->tail = iterPrev;
+						} else {
+							containingBB->tail = nullptr;
+							containingBB->head = nullptr;
+						}
+					}
+				} else {
+					if (iterPrev->containingBB == containingBB) {
+						containingBB->tail = iterPrev;
+					} else {
+						containingBB->tail = nullptr;
+						containingBB->head = nullptr;
+					}
+				}
+			}
+			if (iterNext != nullptr) {
+				iterPrev->next = iterNext;
+				iterNext->prev = iterPrev;
+			} else {
+				iterPrev->next = nullptr;
+			}
+
+
+		}
+
+		else if (iter->op == PHI) {
 			SSAValue* phiOperand1 = iter->operand1;
 			SSAValue* phiOperand2 = iter->operand2;
 			if (phiOperand1->regToMoveTo != 0 || phiOperand1->op == CONST) {
@@ -2150,13 +2219,45 @@ void SSA::cleanInstList() {
 
 				}
 				if (bbToAddMoveIn != iter->containingBB) {
-					SSAValue* currentTail = bbToAddMoveIn->tail;
-					SSAValue* currentTailNext = currentTail->next;
-					currentTail->next = moveInstr;
-					moveInstr->prev = currentTail;
-					moveInstr->next = currentTailNext;
-					currentTailNext->prev = moveInstr;
-					bbToAddMoveIn->tail = moveInstr;
+					if (bbToAddMoveIn->tail != nullptr) {
+						SSAValue* currentTail = bbToAddMoveIn->tail;
+						SSAValue* currentTailNext = currentTail->next;
+						std::cout << "current tail is " << currentTail->instCFGRegRepr() << std::endl;
+						if (currentTail->op == BRA) {
+							SSAValue* currentTailPrev = currentTail->prev;
+							currentTailPrev->next = moveInstr;
+							moveInstr->prev = currentTailPrev;
+							moveInstr->next = currentTail;
+							currentTail->prev = moveInstr;
+							if (currentTail == bbToAddMoveIn->head) {
+								bbToAddMoveIn->head = moveInstr;
+							}
+						} else {
+							currentTail->next = moveInstr;
+							moveInstr->prev = currentTail;
+							moveInstr->next = currentTailNext;
+							currentTailNext->prev = moveInstr;
+							bbToAddMoveIn->tail = moveInstr;
+
+						}
+
+
+						//SSAValue* currentTail = bbToAddMoveIn->tail;
+						//SSAValue* currentTailNext = currentTail->next;
+						//currentTail->next = moveInstr;
+						//moveInstr->prev = currentTail;
+						//moveInstr->next = currentTailNext;
+						//currentTailNext->prev = moveInstr;
+					} else {
+						
+						bbToAddMoveIn->head = moveInstr;
+						bbToAddMoveIn->tail = moveInstr;
+						moveInstr->prev = bbToAddMoveIn->fallThroughFrom->tail;
+						bbToAddMoveIn->fallThroughFrom->tail->next = moveInstr;
+						moveInstr->next = bbToAddMoveIn->fallThrough->head;
+						bbToAddMoveIn->fallThrough->head->prev = moveInstr;
+					}
+
 				} else {
 					SSAValue* whileJoinIter = bbToAddMoveIn->tail;
 					while (whileJoinIter != bbToAddMoveIn->head->prev) {
@@ -2179,12 +2280,31 @@ void SSA::cleanInstList() {
 				}
 
 			}
-			if (phiOperand2->regToMoveTo != 0) {
-				BasicBlock* bbToAddMoveIn = phiOperand2->containingBB;
+			if (phiOperand2->regToMoveTo != 0 || phiOperand2->op == CONST) {
+				//BasicBlock* bbToAddMoveIn; //= phiOperand2->containingBB;
+
+				//SSAValue* moveInstr; //= SSACreateMove(phiOperand2->regNum, phiOperand2->regToMoveTo);
+
+				SSAValue* moveInstr;
+				BasicBlock* bbToAddMoveIn;
+				if (phiOperand2->op == CONST) {
+					if (iter->containingBB->fallThroughFrom != nullptr && iter->containingBB->fallThroughFrom->conditionalBlockType == "ifThenElse-Else") {
+						bbToAddMoveIn = iter->containingBB->fallThroughFrom;
+					} else if (iter->containingBB->branchFrom != nullptr && iter->containingBB->branchFrom->splitType == "if") {
+						bbToAddMoveIn = iter->containingBB->branchFrom;
+					} else {
+						bbToAddMoveIn = iter->containingBB;
+					}
+					moveInstr = SSACreateConstMove(phiOperand2, iter->regNum);
+				} else {
+					bbToAddMoveIn = phiOperand2->containingBB;
+					moveInstr = SSACreateMove(phiOperand2->regNum, phiOperand2->regToMoveTo);
+
+				}
 				SSAValue* currentTail = bbToAddMoveIn->tail;
 				SSAValue* currentTailNext = currentTail->next;
-				SSAValue* moveInstr = SSACreateMove(phiOperand2->regNum, phiOperand2->regToMoveTo);
-				if (false) {
+				std::cout << "current tail is " << currentTail->instCFGRegRepr() << std::endl;
+				if (currentTail->op == BRA) {
 					SSAValue* currentTailPrev = currentTail->prev;
 					currentTailPrev->next = moveInstr;
 					moveInstr->prev = currentTailPrev;
@@ -2299,52 +2419,7 @@ void SSA::cleanInstList() {
 			
 
 		}
-		if (iter->deadCode) {
-			SSAValue* iterPrev = iter->prev;
-			SSAValue* iterNext = iter->next;
-			BasicBlock* containingBB = iter->containingBB;
-			if (iter == containingBB->head) {
-				if (iterNext != nullptr) {
-					if (iterNext->containingBB == containingBB) {
-						containingBB->head = iterNext;
-					} else {
-						containingBB->head = nullptr;
-					}
-				} else {
-					containingBB->head = nullptr;
-					containingBB->tail = nullptr;
-				}
-			}
-			if (iter == containingBB->tail) {
-				if (iterNext != nullptr) {
-					if (iterNext->containingBB == containingBB) {
-						containingBB->tail = iterNext;
-					} else {
-						if (iterPrev->containingBB == containingBB) {
-							containingBB->tail = iterPrev;
-						} else {
-							containingBB->tail = nullptr;
-							containingBB->head = nullptr;
-						}
-					}
-				} else {
-					if (iterPrev->containingBB == containingBB) {
-						containingBB->tail = iterPrev;
-					} else {
-						containingBB->tail = nullptr;
-						containingBB->head = nullptr;
-					}
-				}
-			}
-			if (iterNext != nullptr) {
-				iterPrev->next = iterNext;
-				iterNext->prev = iterPrev;
-			} else {
-				iterPrev->next = nullptr;
-			}
 
-
-		}
 		if (iter != nullptr && iter->op == BRA) {
 			iter->operand1->label = funcName + std::to_string(labelCount);
 			labelCount++;

@@ -1,34 +1,41 @@
+main 
+    var a, b, c;
+{
+    let a <- a + 1;
+    if a > b then
+        let a <- a + 1;
+    fi;
+    while a < b do
+        let a <- a + 1;
+    od;
+    call OutputNum(a);
+}.
+
+/*
+
 main
     var a, b;
 {
-    let a <- 1;
-    if a < 3 then
-        let a <- a + 2;
-    else
+    let a <- 2 + 1;
+    if a < 2 then
         let a <- 2;
-    fi;
-    call OutputNum(a);
-}.
-/*
-main
-    var a, b, c;
-{
-    let c <- 1;
-    let a <- c + 2;
-    let b <- a;
-    call OutputNum(b);
-    if a < c then
-        while a < 5 do
-            let a <- a + 2;
-            call OutputNum(b);
-            let c <- a + 3;
-        od;
     else
-        let c <- 2;
+        let b <- 1;
     fi;
     call OutputNum(a);
     call OutputNum(b);
-    call OutputNum(c);
+
+}.
+
+main
+    var a;
+{
+    let a <- 2;
+    if a < 2 then
+        let a <- 1 + 2;
+    fi;
+    call OutputNum(a);
+
 }.
 
 
