@@ -2,6 +2,24 @@ main
     var a, b, c;
 {
     let a <- a + 1;
+    while a < b do
+        let a <- 2;
+        if a < b then
+            let a <- a + 1;
+        else
+            let a <- b + 1;
+        fi;
+    od;
+
+
+    call OutputNum(a);
+}.
+
+/*
+main 
+    var a, b, c;
+{
+    let a <- a + 1;
     if a > b then
         let a <- a + 1;
     fi;
@@ -10,8 +28,6 @@ main
     od;
     call OutputNum(a);
 }.
-
-/*
 
 main
     var a, b;

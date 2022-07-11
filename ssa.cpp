@@ -14,7 +14,7 @@ std::string SSAValue::getTextForEnum(int enumVal) {
 }
 
 std::string SSAValue::formatOperand(SSAValue* operand) {
-	if (operand->op == NOP) {
+	if (operand->op == NOP && operand->label != "") {
 		return "(" + operand->label + ")";
 	} else {
 		return "(" + std::to_string(operand->id) + ")";
@@ -143,9 +143,7 @@ std::string SSAValue::instCFGRepr() {
 
 std::string SSAValue::instCFGRegRepr() {
 	std::string output = "";
-/*	if (deadCode) {
-		output = "";
-	} else */
+
 	if (op == moveConst) {
 		output = moveConstRepr();
 	} else if (op == move) {
@@ -323,7 +321,7 @@ SSAValue* SSA::SSACreateNop() {
 
 
 void SSA::updateNop(SSAValue* nopInst) {
-	//std::cout << "In update nop" << std::endl;
+	// set other fields of nop ssavalue
 	nopInst->id = maxID++;
 	addSSAValue(nopInst);
 	addInOrder(nopInst);
@@ -335,6 +333,7 @@ void SSA::addInOrder(SSAValue* newInst) {
 }
 
 SSAValue* SSA::findPrevDomWithOpcode(opcode operation) {
+	// find previous dominating instruction with same opcode
 	for (int i = inOrder.size() - 1; i >= 0; i--) {
 
 		std::vector<SSAValue*> inner = inOrder.at(i);
@@ -428,10 +427,7 @@ std::unordered_map<std::string, SSAValue*> SSA::exitScope() {
 	std::unordered_map<std::string, SSAValue*> lastScope = symTable.back();
 	symTable.pop_back();
 	inOrder.pop_back();
-	//for (auto kv : lastScope) {
-	//	SSAValue* prevOccur = findSymbol(kv.first);	
-	//	phiMap.insert({ prevOccur, kv.second });
-	//}
+
 	scopeDepth = scopeDepth - 1;
 	return lastScope;
 }
@@ -542,7 +538,6 @@ void SSA::printSSA() {
 
 	SSAValue* current = instList;
 	while (current != nullptr) {
-		//current->instRepr();
 		current->instReprWNames();
 
 		current = current->next;
@@ -574,16 +569,7 @@ void SSA::printVarDeclList() {
 }
 
 std::string SSA::reprBasicBlocks(BasicBlock* head, bool printRegs) {
-	//std::cout << head->id << std::endl;
-	//if (head == nullptr) {
-	//	return "";
-	//} else {
-	//	std::cout << head->id << std::endl;
-	//	return head->bbRepr();
-	//}
-	//std::string ft = reprBasicBlocks(head->fallThrough);
-	//std::string br = reprBasicBlocks(head->branch);
-	////std::cout << ft << "\n" << br << std::endl;
+
 	if (constBlock->fallThrough == nullptr) {
 		connectFT(constBlock, bbListHead);
 		basicBlocks.push_back(constBlock);
@@ -593,164 +579,13 @@ std::string SSA::reprBasicBlocks(BasicBlock* head, bool printRegs) {
 		out_string += bb->bbRepr(printRegs) + "\n";
 	}
 	return out_string;
-
-	
-
 }
 
 
-//std::string SSA::genBBStart(int bbID) {
-//	std::string bbIDStr = std::to_string(bbID);
-//	std::string currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
-//	return currentBB;
-//}
-
-//std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> SSA::genBasicBlocks() {
-//	/*
-//		if a branch instruction is found
-//			close current bb (include branch inst in current bb)
-//			create new bb
-//			store branch-to id for new block
-//		else
-//		    if id was previously a branch-to id
-//			    close current bb
-//				create new bb
-//			else
-//			    just add inst to bb
-//	*/
-//
-//	SSAValue* current = instList; 
-//	SSAValue* prevCurrent = current;
-//	std::unordered_map<int, BasicBlock*> branchToBlocks; // inst ids for when to create new bb
-//	std::vector<BasicBlock*> basicBlocks;
-//	std::vector<BBEdge*> bbEdges;
-//
-//	BasicBlock* currentBB = nullptr;
-//	int bbID = 1;
-//
-//
-//	while (current != nullptr) {
-//		if (currentBB == nullptr) {
-//			currentBB = new BasicBlock(true);
-//			currentBB->setBBID(1);
-//			currentBB->setHead(current);
-//			currentBB->setTail(current);
-//		}
-//		if (current->op <= 17 && current->op >= 11) {
-//			// any branch inst
-//			// close current block, create new block, and store branch-to id for new block later
-//			currentBB->setTail(current);
-//			bbID += 1;
-//			basicBlocks.push_back(currentBB);
-//
-//
-//
-//
-//
-//			currentBB = new BasicBlock(true);
-//			currentBB->setHead(current->next);
-//			currentBB->setTail(current);
-//			currentBB->setBBID(bbID);
-//
-//			BBEdge* newEdge = new BBEdge(basicBlocks.back(), currentBB, "ft");
-//			bbEdges.push_back(newEdge);
-//
-//			
-//
-//
-//
-//			// at this point, currentBB is FT block (edge to it from split block must be ft edge)
-//
-//			int newBlockID;
-//			if (current->op == BRA) {
-//				// bra inst
-//				newBlockID = current->operand1->id;
-//
-//			} else {
-//				// all other branch insts (12 <= op <= 17)
-//				newBlockID = current->operand2->id;
-//
-//			}
-//			// before creating branch block, first check that the inst does not exist above
-//			bool found = false;
-//			BasicBlock* jumpToBlock = nullptr;
-//			for (BasicBlock* bb : basicBlocks) {
-//				SSAValue* bbHead = bb->getHead();
-//				SSAValue* bbTail = bb->getTail();
-//				while (bbHead != bbTail->next) {
-//					if (bbHead->id == newBlockID) {
-//						found = true;
-//						jumpToBlock = bb;
-//						break;
-//					}
-//
-//					bbHead = bbHead->next;
-//				}
-//			}
-//			std::cout << "FOUND is " << found << std::endl;
-//			if (!found) {
-//				BasicBlock* branchBlock = new BasicBlock(false);
-//				branchToBlocks.insert({ newBlockID, branchBlock });
-//				BBEdge* newEdge = new BBEdge(basicBlocks.back(), branchBlock, "br");
-//				bbEdges.push_back(newEdge);
-//			} else {
-//				BBEdge* newEdge = new BBEdge(basicBlocks.back(), jumpToBlock, "br");
-//				bbEdges.push_back(newEdge);
-//
-//			}
-//
-//		} else {
-//			bool mustCreateNewBlock = false;
-//			// check if current inst id needs to be start of new bb
-//			BasicBlock* branchToBlock = nullptr;
-//			for (auto kv : branchToBlocks) {
-//				if (current->id == kv.first) {
-//					branchToBlock = kv.second;
-//					break;
-//				}
-//			}
-//			if (branchToBlock != nullptr) {
-//				basicBlocks.push_back(currentBB);
-//				bbID += 1;
-//				currentBB = branchToBlock;
-//				currentBB->setBBID(bbID);
-//				currentBB->setHead(current);
-//				currentBB->setTail(current);
-//				// at this point, new block is a branch-to block, must have edge type of branch
-//			} else {
-//				// just add instruction to current block
-//				if (currentBB->getHead() == nullptr) {
-//					currentBB->setHead(current);
-//				}
-//				currentBB->setTail(current);
-//			}
-//		}
-//		prevCurrent = current;
-//		current = current->next;
-//	}
-//	currentBB->setTail(prevCurrent); // questionable
-//	basicBlocks.push_back(currentBB);
-//
-//	return std::make_tuple(basicBlocks, bbEdges);
-	//std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> info;
-	//info->basicBlocks = basicBlocks;
-	//info->bbEdges = bbEdges;
-	//return info;
-//}
 
 void SSA::gen(bool printRegs) {
-	//std::tuple<std::vector<BasicBlock*>, std::vector<BBEdge*>> info = genBasicBlocks();
-	//std::vector<BasicBlock*> basicBlocks = std::get<0>(info);
-	//std::vector<BBEdge*> bbEdges = std::get<1>(info);
 
 	std::cout << reprBasicBlocks(bbListHead, printRegs) << std::endl;
-	//for (BasicBlock* bb: basicBlocks) {
-	//	std::cout << bb->bbRepr() << std::endl;
-	//}
-
-	//for (BBEdge* edge : bbEdges) {
-	//	std::cout << edge->bbEdgeRepr() << std::endl;
-	//}
 }
 
 BasicBlock* SSA::createContext() {
@@ -837,9 +672,6 @@ BasicBlock* SSA::createBlock() {
 }
 void SSA::setJoinType(BasicBlock* block, std::string type) {
 	block->joinType = type;
-	//if (type == "while") {
-	//	block->isWhile = true;
-	//}
 }
 
 void SSA::initBlock(BasicBlock* blockToInit) {
@@ -847,186 +679,23 @@ void SSA::initBlock(BasicBlock* blockToInit) {
 	basicBlocks.push_back(blockToInit);
 
 }
-//void SSA::generateDotLang() {
-//	
-//	std::unordered_map<int, BBEdge*> branchEdgeMap;
-//	std::unordered_map<int, BBEdge*> fallThroughEdgeMap;
-//
-//	
-//	SSAValue* current = instList;
-//	SSAValue* prevCurrent = nullptr;
-//	std::vector<int> newBlockIDs;
-//	std::vector<std::string> bbStrings;
-//	std::string currentBB = "";
-//	int bbID = 1;
-//
-//	bool isBlockNew = false;
-//
-//	while (current != nullptr) {
-//		if (currentBB == "") {
-//			currentBB = "bb1 [shape=record, label=\" < b > BB1 | {";
-//		}
-//
-//
-//
-//
-//		if (current->op <= 17 && current->op >= 11) {
-//			// branch inst
-//			// close current block, create new block, and store branch-to id for new block later
-//			BBEdge* newBranchEdge = new BBEdge(bbID);
-//			BBEdge* newFTEdge = new BBEdge(bbID);
-//			currentBB = currentBB + current->instCFGRepr() + "}\"];";
-//
-//			fallThroughEdgeMap.insert({ current->id + 1, newFTEdge });
-//			current->bbID = bbID;
-//
-//			bbStrings.push_back(currentBB);
-//			bbID += 1;
-//			std::string bbIDStr = std::to_string(bbID);
-//			currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
-//			isBlockNew = true;
-//			int newBlockID;
-//			if (current->op == 11) {
-//				// bra inst
-//				newBlockID = current->operand1->id;
-//
-//			} else {
-//				// all other branch insts (12 <= op <= 17)
-//				newBlockID = current->operand2->id;
-//			}
-//			
-//			branchEdgeMap.insert({ newBlockID, newBranchEdge });
-//			newBlockIDs.push_back(newBlockID);
-//
-//		} else {
-//			bool mustCreateNewBlock = false;
-//			for (int id : newBlockIDs) {
-//				if (current->id == id) {
-//					mustCreateNewBlock = true;
-//					break;
-//				}
-//			}
-//			if (mustCreateNewBlock) {
-//				if (!isBlockNew) {
-//					currentBB.pop_back();
-//					currentBB = currentBB + "}\"];";
-//					bbStrings.push_back(currentBB);
-//					bbID += 1;
-//					std::string bbIDStr = std::to_string(bbID);
-//					currentBB = "bb" + bbIDStr + "[shape=record, label=\" < b > BB" + bbIDStr + " | {";
-//
-//				}
-//				currentBB = currentBB + current->instCFGRepr() + "|";
-//				current->bbID = bbID;
-//				isBlockNew = false;
-//			} else {
-//				// just add instruction to current block
-//				currentBB = currentBB + current->instCFGRepr() + "|";
-//				current->bbID = bbID;
-//
-//				isBlockNew = false;
-//			}
-//
-//		}
-//		prevCurrent = current;
-//		current = current->next;
-//
-//	}
-//	currentBB.pop_back();
-//	currentBB = currentBB + "}\"];";
-//	bbStrings.push_back(currentBB);
-//
-//	current = instList;
-//	while (current != nullptr) {
-//
-//		try {
-//			BBEdge* bEdge = branchEdgeMap.at(current->id);
-//			bEdge->setToBlockID(current->bbID);
-//		} catch (std::out_of_range& oor) {
-//			// intentionally left blank
-//		}
-//
-//		try {
-//			BBEdge* fEdge = fallThroughEdgeMap.at(current->id);
-//			fEdge->setToBlockID(current->bbID);
-//
-//		} catch (std::out_of_range& oor) {
-//			 //intentionally left blank
-//		}
-//		current = current->next;
-//	}
-//
-//
-//
-//	std::cout << "digraph G {" << std::endl;
-//	for (std::string s : bbStrings) {
-//		std::cout << s << std::endl;
-//	}
-//
-//
-//
-//	std::unordered_map<int, int> visited;
-//	for (auto kv : branchEdgeMap) {
-//		BBEdge* edge = kv.second;
-//		std::cout << "bb" << edge->getFrom() << ":s -> bb" << edge->getTo() << ":n;" << std::endl;
-//		visited.insert({ edge->getFrom(), edge->getTo() });
-//	}
-//	for (auto kv : fallThroughEdgeMap) {
-//		BBEdge* edge = kv.second;
-//		try {
-//			int to = visited.at(edge->getFrom());
-//			if (to != edge->getTo()) {
-//				std::cout << "bb" << edge->getFrom() << ":s -> bb" << edge->getTo() << ":n;" << std::endl;
-//
-//			}
-//		} catch (std::out_of_range& oor) {
-//			std::cout << "bb" << edge->getFrom() << ":s -> bb" << edge->getTo() << ":n;" << std::endl;
-//
-//		}
-//	}
-//
-//
-//	std::cout << "}" << std::endl;
-//	for (auto kv : branchEdgeMap) {
-//		BBEdge* edge = kv.second;
-//		std::cout << kv.first << " " << edge->getFrom() << " " << edge->getTo() << std::endl;
-//	}
-//}
 
 
-// BasicBlock
-
-
-//BasicBlock::BasicBlock(bool ft) {
-//	head = nullptr;
-//	tail = nullptr;
-//	id = 0;
-//	incomingEdgeIsFT = ft;
-//}
 
 SSAValue* BasicBlock::getHead() {
 	return head;
 }
 
-//void BasicBlock::setHead(SSAValue* bbHead) {
-//	head = bbHead;
-//}
 
 SSAValue* BasicBlock::getTail() {
 	return tail;
 }
 
-//void BasicBlock::setTail(SSAValue* bbTail) {
-//	tail = bbTail;
-//}
 
 int BasicBlock::getID() {
 	return id;
 }
 
-//void BasicBlock::setBBID(int bbID) {
-//	id = bbID;
-//}
 
 std::string BasicBlock::bbRepr(bool printRegs) {
 	SSAValue* current = head;
@@ -1063,9 +732,6 @@ std::string BasicBlock::bbRepr(bool printRegs) {
 		}
 		std::string toIDStr = std::to_string(fallThrough->id);
 
-		//if (tail != nullptr && tail->op == BRA) {
-		//	type = "BR";
-		//}
 		std::string out = funcName + fromIDStr + ":s -> " + funcName + toIDStr + ":n [label=\"" + type + "\"];";
 		bbString += "\n" + out;
 	}
@@ -1104,27 +770,16 @@ void SSA::reset() {
 
 	inOrder = std::vector<std::vector<SSAValue*>>();
 
-	//constTable = std::unordered_map<int, SSAValue*>();
 }
 
 
 
 void SSA::generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, std::vector<SSAValue*>& phis, SSAValue* instTail, SSAValue* stopAt) {
 
-	//map liverange;
-	//list curLiveValues = {};
-	//while curInst not head:
-	//if curInst in curLiveValues :
-	//curLiveValues - {curInst}
-	//curLiveValues = curLiveValues + {curInst->operands};
-	//liverange[curInst#] = curLiveValues
-	//	curInst = curInst->prev
-
 	SSAValue* iter = instTail;
 	bool nopEncountered = false;
-
+	int nopEncounteredCount = 0;
 	while (iter != stopAt && iter->op != CONST) {
-		std::cout << "Current iter is " << iter->instCFGRepr() << ", set is: " << std::endl;
 		
 		for (SSAValue* val : liveRanges) {
 			std::cout << val->id << ", ";
@@ -1135,28 +790,27 @@ void SSA::generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, st
 		}
 		if (iter->op == NOP) {
 			nopEncountered = true;
+			nopEncounteredCount += 1;
 		}
 		if (nopEncountered && bb->joinType == "while" && bb->numVisits == 1) {
 			// above the phi instructions in while join block
 			break;
-		} else if (nopEncountered && bb->joinType == "while" && bb->numVisits == 2) {
-			std::cout << "While Join Above the Phis Visited twice" << std::endl;
+		} else if (nopEncountered && bb->joinType == "while" && bb->numVisits == 2 && nopEncounteredCount == 1) {
 			for (SSAValue* phi : phis) {
 				liveRanges.insert(phi->operand1);
 			}
 			phis = std::vector<SSAValue*>();
+			nopEncountered = false;
+
 		}
 		bool deadCode = false;
 		if (liveRanges.find(iter) != liveRanges.end()) {
-			std::cout << "not in dead code condition" << std::endl;
 			liveRanges.erase(iter);
-
 		} else {
 			if ( (iter->op >= BRA && iter->op <= BGT) || 
 				 (iter->op == write) || (iter->op == writeNL)) {
 
 			} else {
-				std::cout << "in dead code" << std::endl;
 				deadCode = true;
 			}
 		}
@@ -1174,30 +828,6 @@ void SSA::generateLiveRanges(BasicBlock* bb, std::set<SSAValue*>& liveRanges, st
 
 			for (SSAValue* lrVal : liveRanges) {
 				iGraphSet.insert(lrVal);
-
-				//try {
-				//	std::set<SSAValue*> iGraphSet = iGraph.at(iter);
-				//	iGraphSet.insert(lrVal);
-				//	iGraph.insert_or_assign(iter, iGraphSet);
-				//}
-				//catch (std::out_of_range& oor) {
-				//	std::set<SSAValue*> innerSet;
-				//	innerSet.insert(lrVal);
-				//	iGraph.insert({ iter, innerSet });
-				//	// intentionally left blank
-				//}
-				//try {
-				//	std::set<SSAValue*> iGraphSet = iGraph.at(lrVal);
-				//	//std::cout << "checking " << iter->instCFGRepr() << std::endl;
-				//	iGraphSet.insert(iter);
-				//}
-				//catch (std::out_of_range& oor) {
-				//	std::set<SSAValue*> innerSet;
-				//	innerSet.insert(iter);
-				//	iGraph.insert({ lrVal, innerSet });
-				//
-				////	// intentionally left blank
-				//}
 
 			}
 			if (!iter->deadCode) {
@@ -1268,9 +898,6 @@ void SSA::printLiveRanges() {
 				madeEdges.push_back(newTup2);
 
 			}
-
-
-
 		}
 		std::cout << output << std::endl;
 	}
@@ -1293,13 +920,7 @@ void SSA::traverseBasicBlocks(BasicBlock* startBlock) {
 	std::queue<BasicBlock*> q;
 	q.push(startBlock);
 	while (q.size() != 0) {
-		//std::cout << "Items in q are: ";
-		//std::queue<BasicBlock*> copy = q;
-		//while (copy.size() != 0) {
-		//	std::cout << copy.front()->id << "[ " << copy.front()->numVisits << " ], ";
-		//	copy.pop();
-		//}
-		//std::cout << std::endl;
+
 		BasicBlock* currentBlock = q.front();
 		q.pop();
 		if (!currentBlock->visited) {
@@ -1310,14 +931,8 @@ void SSA::traverseBasicBlocks(BasicBlock* startBlock) {
 			currentBlock->visited = true;
 		} 
 		startBlock->visited = true;
-		//currentBlock->visited = true;
-		//std::cout << "split type is " << currentBlock->splitType << std::endl;
 		if (currentBlock->joinType == "while") {
-			// in while join block
-			//std::cout << "Current Block num visits is " << currentBlock->numVisits << std::endl;
 			if (currentBlock->numVisits == 1) {
-				//std::cout << "In while join" << std::endl;
-				//std::cout << "Adding loopfrom block " << currentBlock->loopBackFrom->id << " from the " << currentBlock->id << " block" << std::endl;
 
 				q.push(currentBlock->loopBackFrom);
 				currentBlock->numVisits = 1;
@@ -1326,13 +941,9 @@ void SSA::traverseBasicBlocks(BasicBlock* startBlock) {
 				BasicBlock* ftBlock = currentBlock->fallThroughFrom;
 				BasicBlock* brBlock = currentBlock->branchFrom;
 				if (ftBlock != nullptr && ftBlock->id != -1) {
-					//std::cout << "In while join" << std::endl;
-					//std::cout << "Adding ftfrom block " << ftBlock->id << " from the " << currentBlock->id << " block" << std::endl;
 					q.push(ftBlock);
 					ftBlock->numVisits += 1;
 				} if (brBlock != nullptr && brBlock->id != -1) {
-					//std::cout << "In while join" << std::endl;
-					//std::cout << "Adding branchfrom block " << brBlock->id << " from the " << currentBlock->id << " block" << std::endl;
 					q.push(brBlock);
 					brBlock->numVisits += 1;
 				}
@@ -1344,15 +955,12 @@ void SSA::traverseBasicBlocks(BasicBlock* startBlock) {
 			if (currentBlock->numVisits == 2) {
 				BasicBlock* ftBlock = currentBlock->fallThroughFrom;
 				BasicBlock* brBlock = currentBlock->branchFrom;
-				//std::cout << "in if split" << std::endl;
 				if (ftBlock != nullptr && ftBlock->id != -1) {
 					std::cout << "In if split" << std::endl;
 					std::cout << "Adding ftfrom block " << ftBlock->id << " from the " << currentBlock->id << " block" << std::endl;
 					q.push(ftBlock);
 					ftBlock->numVisits += 1;
 				} if (brBlock != nullptr && brBlock->id != -1) {
-					//std::cout << "In if split" << std::endl;
-					//std::cout << "Adding branchfrom block " << brBlock->id << " from the " << currentBlock->id << " block" << std::endl;
 					q.push(brBlock);
 					brBlock->numVisits += 1;
 				}
@@ -1370,150 +978,20 @@ void SSA::traverseBasicBlocks(BasicBlock* startBlock) {
 
 
 			if (ftBlock != nullptr && ftBlock->joinType == "while" && ftBlock->numVisits == 1) {
-				//std::cout << "Should only be adding while join here" << std::endl;
-				//std::cout << "Adding ftfrom block " << ftBlock->id << " from the " << currentBlock->id << " block" << std::endl;
 				q.push(ftBlock);
 				ftBlock->numVisits += 1;
 			} else if (ftBlock != nullptr && !ftBlock->visited && ftBlock->id != -1) {
-				//std::cout << "Adding ftfrom block " << ftBlock->id << " from the " << currentBlock->id << " block" << std::endl;
 
 				q.push(ftBlock);
 				ftBlock->numVisits += 1;
 			}
 			if (brBlock != nullptr && !brBlock->visited && brBlock->id != -1) {
-				//std::cout << "Adding branchfrom block " << brBlock->id << " from the " << currentBlock->id << " block" << std::endl;
 				q.push(brBlock);
 				brBlock->numVisits += 1;
 
 			}
 		}
 	}
-	//std::stack<BasicBlock*> s;
-	//q.push(startBlock);
-	//startBlock->visited = true;
-	//BasicBlock* savedBlock = nullptr;
-	//while (q.size() != 0) {
-	//	BasicBlock* currentBlock = q.front();
-	//	if (savedBlock == nullptr) {
-	//		//std::cout << "saved block is empty" << std::endl;
-	//	} else {
-	//		//std::cout << "saved block is " << savedBlock->getID() << std::endl;
-	//	}
-	//	if (s.size() > 1 && savedBlock == s.top()) {
-	//		//std::cout << "in savedblock == s.top() check " << std::endl;
-	//		s.pop();
-	//		currentBlock = savedBlock;
-	//		savedBlock = s.top();
-	//	} else {
-	//		if (currentBlock->isWhile) {
-	//			if (currentBlock->joinType == "") {
-	//				// while block that has been visited already
-	//				if (s.size() > 0 && currentBlock != s.top() ) {
-	//					//std::cout << currentBlock->id <<" coming from here" << std::endl;
-	//					//std::cout << "top of stack is " << s.top()->id << std::endl;
-	//					//std::cout << "going over join block again but too early " << currentBlock->getID() << std::endl;
-	//					savedBlock = currentBlock;
-
-	//					if (q.size() > 0) {
-	//						q.pop();
-	//					}
-	//					if (q.size() > 0) {
-	//						currentBlock = q.front();
-	//						//std::cout << "current block is now " << currentBlock->getID() << std::endl;
-
-	//					} else {
-	//						currentBlock = s.top();
-	//						s.pop();
-	//					}
-	//				}
-	//			}
-	//		}
-	//		if (q.size() > 0) {
-
-	//			q.pop();
-	//		}
-	//	}
-
-	//	std::cout << currentBlock->getID() << std::endl;
-	//	if (currentBlock->fallThroughFrom != nullptr && currentBlock->fallThroughFrom->visited == false) {
-	//		if (currentBlock->fallThroughFrom->id != -1 && currentBlock->joinType != "while") {
-	//			BasicBlock* myBB = currentBlock->fallThroughFrom;
-	//			q.push(myBB);
-
-	//		}
-	//		if (currentBlock->fallThroughFrom->joinType != "while") {
-	//			currentBlock->fallThroughFrom->visited = true;
-	//		} else {
-	//			currentBlock->fallThroughFrom->joinType = "";
-	//			s.push(currentBlock->fallThroughFrom);
-	//		}
-	//	}
-	//	if (currentBlock->branchFrom != nullptr && currentBlock->branchFrom->visited == false) {
-	//		BasicBlock* myBB = currentBlock->branchFrom;
-	//		//if (myBB->isWhile) {
-	//		//	if (myBB->joinType == "while") {
-	//		//		// not yet visited
-	//		//		q.push(myBB);
-	//		//	} else {
-	//		//		// already visited
-	//		//		if (myBB == s.top()) {
-	//		//			//std::cout << myBB->getID() << s.top()->getID() << std::endl;
-	//		//			s.pop();
-	//		//			q.push(myBB);
-	//		//		}
-	//		//	}
-	//		//} else {
-	//		//	q.push(myBB);
-	//		//}
-	//		q.push(myBB);
-	//		if (currentBlock->branchFrom->joinType != "while") {
-	//			currentBlock->branchFrom->visited = true;
-
-	//		} else {
-	//			currentBlock->branchFrom->joinType = "";
-	//			s.push(currentBlock->branchFrom);
-	//		}
-	//	}
-
-	//	if (q.size() == 0 && s.size() > 0) {
-	//		q.push(s.top());
-	//		//std::cout << s.top()->getID() << " is the top of the stack" << std::endl;
-	//		s.pop();
-	//	}
-	//}
-
-	////if its a while join
-	////	if it has been visited once
-	////		if it is the top on the stack
-	////			add to queue
-	////  else
-	////      add to queue
-	////else
-	////	add to queue
-	//// 
-
-	////BasicBlock* myBB = currentBlock->fallThroughFrom;
-	////if (myBB->isWhile) {
-	////	if (myBB->joinType == "while") {
-	////		// not yet visited
-	////		q.push(myBB);
-	////	} else {
-	////		// already visited
-	////		if (myBB == s.top()) {
-	////			q.push(myBB);
-	////		}
-	////	}
-	////} else {
-	////	q.push(myBB);
-	////}
-
-
-	////if (currentBlock->fallThroughFrom != nullptr) {
-	////	traverseBasicBlocks(currentBlock->fallThroughFrom);
-	////}
-	////if (currentBlock->branchFrom != nullptr) {
-	////	traverseBasicBlocks(currentBlock->branchFrom);
-	////}
 
 }
 
@@ -1591,7 +1069,6 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 			// at the end of then in if-then-else struct
 			bb->unionLiveRanges(bb->branch, "left");
 		} else {
-			// suss
 			bb->unionLiveRanges(bb->fallThrough, "left");
 			bb->unionLiveRanges(bb->branch, "right");
 		}
@@ -1602,50 +1079,34 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 			// at the end of then in if-then struct
 			bb->unionLiveRanges(bb->fallThrough, "left");
 		} else {
-			//std::cout << "None of the above cases" << std::endl;
-			//std::cout << bb->bbRepr() << std::endl;
 			bb->unionLiveRanges(bb->fallThrough, "");
 			bb->unionLiveRanges(bb->branch, "right");
 		}
 	} else {
 		if (bb->loop != nullptr) {
 			// end of while body struct
-			std::cout << "Found while body block" << std::endl;
-			std::cout << bb->bbRepr(false) << std::endl;
 			bb->unionLiveRanges(bb->loop, "right");
 		} else {
-			std::cout << "not while body block!!!" << std::endl;
 			// need to handle cond with only then block here
 			if (bb->splitType == "if") {
 				if (bb->branch->joinType == "while") {
 					if (bb->fallThrough->conditionalBlockType == "ifThen-Then") {
-						std::cout << "if split found" << std::endl;
-						std::cout << "printing items in live set" << std::endl;
-						for (SSAValue* lrVal : bb->liveRanges) {
-							std::cout << lrVal->id << ", ";
-						}
-						std::cout << std::endl;
 
 						bb->unionLiveRanges(bb->branch, "right");
-						std::cout << "printing items in live set" << std::endl;
-						for (SSAValue* lrVal : bb->liveRanges) {
-							std::cout << lrVal->id << ", ";
-						}
-						std::cout << std::endl;
 
 					} else {
 						bb->unionLiveRanges(bb->branch, "left");
 
 					}
 				} else {
-					bb->unionLiveRanges(bb->branch, "right"); // suss
+					bb->unionLiveRanges(bb->branch, "right");
 
 				}
 			} else {
-				bb->unionLiveRanges(bb->branch, ""); // suss
+				bb->unionLiveRanges(bb->branch, "");
 
 			}
-			//std::cout << "Issue is here" << std::endl;
+
 			bb->unionLiveRanges(bb->fallThrough, "");
 			bb->unionLiveRanges(bb->loop, "");
 
@@ -1653,12 +1114,6 @@ void SSA::handleTraverseStep(BasicBlock* bb) {
 	}
 
 
-	//bb->unionLiveRanges(bb->fallThrough, "ft");
-	//bb->unionLiveRanges(bb->branch, "br");
-	//bb->unionLiveRanges(bb->loop, "loop");
-
-	//bb->unionLiveRanges(bb->fallThrough, "ft");
-	//bb->unionLiveRanges(bb->branch, "br");
 	SSAValue* stopAt; 
 	if (bb->head != nullptr) {
 		stopAt = bb->head->prev;
@@ -1705,19 +1160,10 @@ void SSA::generateIGraphNodes() {
 	}
 	for (auto kv : iGraph) {
 		IGraphNode* node = findInIGraphNodes(kv.first);
-		//if (node == nullptr) {
-		//	// create a new igraph node
-		//	node = new IGraphNode(kv.first, kv.first->id);
-		//	iGraphNodes.push_back(node);
-		//}
 		std::vector<IGraphNode*> toErase;
 		for (SSAValue* connectedToVal : kv.second) {
 			IGraphNode* connectToNode = findInIGraphNodes(connectedToVal);
-			//if (connectToNode == nullptr) {
-			//	// need to create a new IGraphNode
-			//	connectToNode = new IGraphNode(connectedToVal, connectedToVal->id);
-			//	iGraphNodes.push_back(connectToNode);
-			//}
+
 			bool erased = false;
 			if (node->initValue->deadCode) {
 				toErase.push_back(node);
@@ -1784,7 +1230,6 @@ void SSA::addNewEdges(IGraphNode* newConnection, IGraphNode* oldConnection) {
 	}
 }
 void SSA::coalescePhi(IGraphNode* node, std::vector<IGraphNode*>& toDelete) {
-	std::cout << "In coalesce phi" << std::endl;
 	node->visited = true;
 	SSAValue* val = node->initValue;
 	SSAValue* phiOperand1 = val->operand1;
@@ -1792,14 +1237,12 @@ void SSA::coalescePhi(IGraphNode* node, std::vector<IGraphNode*>& toDelete) {
 
 
 	if (phiOperand1 != nullptr && phiOperand1->op != CONST) {
-		std::cout << "Op1 " << node->iGraphNodeRepr() << "\n" << phiOperand1->instCFGRepr() << std::endl;
 
 		if (!checkInterferesWith(node, phiOperand1)) {
 			IGraphNode* phiNode = nullptr;
 			if (phiOperand1->op == PHI) {
 				phiNode = findInIGraphNodes(phiOperand1);
 				if (phiNode == nullptr) {
-					std::cout << "Phi node is nullptr" << std::endl;
 				} else {
 					coalescePhi(phiNode, toDelete);
 					for (SSAValue* nodeVal : phiNode->values) {
@@ -1815,14 +1258,11 @@ void SSA::coalescePhi(IGraphNode* node, std::vector<IGraphNode*>& toDelete) {
 				}
 			}
 			node->values.insert(phiOperand1);
-			//IGraphNode* phiOp1Node = findInIGraphNodes(phiOperand1);
 
 			if (phiNode != nullptr) {
 				for (IGraphNode* newInter : phiNode->connectedTo) {
 					node->connectedTo.insert(newInter);
 				}
-				//iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp1Node));
-				//iGraphNodes.at(findIndexOfIGraphNode(phiOp1Node)) = nullptr;
 				toDelete.push_back(phiNode);
 				addNewEdges(node, phiNode);
 				node->values.erase(val);
@@ -1833,16 +1273,13 @@ void SSA::coalescePhi(IGraphNode* node, std::vector<IGraphNode*>& toDelete) {
 		}
 	}
 	if (phiOperand2 != nullptr && phiOperand2->op != CONST) {
-		std::cout << "Op2 " << node->iGraphNodeRepr() << "\n" << phiOperand2->instCFGRepr() << std::endl;
 
 		if (!checkInterferesWith(node, phiOperand2)) {
-			std::cout << "no interference" << std::endl;
 			IGraphNode* phiNode = nullptr;
-			if (phiOperand1->op == PHI) {
+			if (phiOperand2->op == PHI) {
 				phiNode = findInIGraphNodes(phiOperand2);
 				coalescePhi(phiNode, toDelete);
 				if (phiNode == nullptr) {
-					std::cout << "Phi node is nullptr" << std::endl;
 				}
 				for (SSAValue* nodeVal : phiNode->values) {
 					node->values.insert(nodeVal);
@@ -1854,16 +1291,11 @@ void SSA::coalescePhi(IGraphNode* node, std::vector<IGraphNode*>& toDelete) {
 					node->values.insert(nodeVal);
 				}
 			}
-			std::cout << "below conditional" << std::endl;
 			node->values.insert(phiOperand2);
-			//IGraphNode* phiOp2Node = findInIGraphNodes(phiOperand2);
 			if (phiNode != nullptr) {
-				std::cout << "node is nullptr" << std::endl;
 				for (IGraphNode* newInter : phiNode->connectedTo) {
 					node->connectedTo.insert(newInter);
 				}
-				//iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp2Node));
-				//iGraphNodes.at(findIndexOfIGraphNode(phiOp2Node)) = nullptr;
 				toDelete.push_back(phiNode);
 				addNewEdges(node, phiNode);
 				node->values.erase(val);
@@ -1876,61 +1308,12 @@ void SSA::coalescePhi(IGraphNode* node, std::vector<IGraphNode*>& toDelete) {
 }
 
 void SSA::clusterIGraphNodes() {
-	//std::vector<IGraphNode*> nodes;
-	//for (IGraphNode* node : iGraphNodes) {
-	//	SSAValue* val = node->initValue;
-	//	std::cout << val->instCFGRepr() << std::endl;
-	//	if (val->op == PHI) {
-	//		std::cout << "found phi!" << std::endl;
 
-	//		SSAValue* phiOperand1 = val->operand1;
-	//		SSAValue* phiOperand2 = val->operand2;
-	//		if (phiOperand1->op != CONST) {
-	//			std::cout << node->iGraphNodeRepr() << "\n" << phiOperand1->instCFGRepr() << std::endl;
-
-	//			if (!checkInterferesWith(node, phiOperand1)) {
-	//				node->values.insert(phiOperand1);
-	//				IGraphNode* phiOp1Node = findInIGraphNodes(phiOperand1);
-	//				for (IGraphNode* newInter : phiOp1Node->connectedTo) {
-	//					node->connectedTo.insert(newInter);
-	//				}
-	//				//iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp1Node));
-	//				//iGraphNodes.at(findIndexOfIGraphNode(phiOp1Node)) = nullptr;
-	//				nodes.push_back(phiOp1Node);
-	//				addNewEdges(node, phiOp1Node);
-	//				node->values.erase(val);
-	//			} else {
-	//				IGraphNode* phiOp1Node = findInIGraphNodes(phiOperand1);
-	//				phiOp1Node->moveTarget = node;
-	//			}
-	//		}
-	//		if (phiOperand2->op != CONST) {
-	//			std::cout << node->iGraphNodeRepr() << "\n" << phiOperand2->instCFGRepr() << std::endl;
-
-	//			if (!checkInterferesWith(node, phiOperand2)) {
-	//				node->values.insert(phiOperand2);
-	//				IGraphNode* phiOp2Node = findInIGraphNodes(phiOperand2);
-	//				for (IGraphNode* newInter : phiOp2Node->connectedTo) {
-	//					node->connectedTo.insert(newInter);
-	//				}
-	//				//iGraphNodes.erase(iGraphNodes.begin() + findIndexOfIGraphNode(phiOp2Node));
-	//				//iGraphNodes.at(findIndexOfIGraphNode(phiOp2Node)) = nullptr;
-	//				nodes.push_back(phiOp2Node);
-	//				addNewEdges(node, phiOp2Node);
-	//				node->values.erase(val);
-	//			} else {
-	//				IGraphNode* phiOp2Node = findInIGraphNodes(phiOperand2);
-	//				phiOp2Node->moveTarget = node;
-	//			}
-	//		}
-	//	}
-	//}
 	std::vector<IGraphNode*> toDelete;
 	for (IGraphNode* node : iGraphNodes) {
 		SSAValue* val = node->initValue;
 		if (val->op == PHI && !node->visited) {
 			coalescePhi(node, toDelete);
-			std::cout << "finished coalesce phi" << std::endl;
 		}
 	}
 	for (auto node : toDelete) {
@@ -1989,7 +1372,6 @@ IGraphNode* SSA::pickNode(std::vector<IGraphNode*> nodes) {
 			return node;
 		}
 	}
-	std::cout << "At end of pickNode" << std::endl;
 	return minNode;
 }
 
@@ -2037,11 +1419,9 @@ int SSA::pickColor(IGraphNode* node) {
 			return newRegColor;
 		}
 	}
-	std::cout << "Pick colors" << std::endl;
 }
 
 void SSA::colorGraph() {
-	std::cout << "Performing Graph Coloring" << std::endl;
 
 	int numRegisters = 5;
 	IGraphNode* node = pickNode(iGraphNodes);
@@ -2049,38 +1429,31 @@ void SSA::colorGraph() {
 		return;
 	}
 	int index = findIndexOfIGraphNode(node);
-	std::cout << "index is " << index << std::endl;
 	if (iGraphNodes.size() != 0 && index >= 0) {
 		iGraphNodes.erase(iGraphNodes.begin() + index);
 	}
 	std::vector<IGraphNode*> addBackTo;
-	//if (node != nullptr) {
 	for (auto editNode : node->connectedTo) {
 		if (editNode != nullptr) {
 			addBackTo.push_back(editNode);
 			editNode->connectedTo.erase(node);
 		}
 	}
-	//}
 	if (iGraphNodes.size() != 0) {
 
 		colorGraph();
 	} else {
 		std::cout << "size is 0" << std::endl;
 	}
-	//if (node != nullptr) {
 	iGraphNodes.push_back(node);
 
-	//}
 	for (auto editNode : addBackTo) {
 		if (editNode != nullptr) {
 			editNode->connectedTo.insert(node);
 		}
 	}
-	//if (node != nullptr) {
 	node->color = pickColor(node);
 
-	//}
 	return;
 
 
@@ -2144,8 +1517,6 @@ void SSA::setRegisters() {
 }
 
 void SSA::cleanInstList() {
-	// have to add move instructions in this function 
-	// have to adjust basic block things
 	int labelCount = 0;
 	SSAValue* iter = instList;
 
@@ -2222,7 +1593,7 @@ void SSA::cleanInstList() {
 					if (bbToAddMoveIn->tail != nullptr) {
 						SSAValue* currentTail = bbToAddMoveIn->tail;
 						SSAValue* currentTailNext = currentTail->next;
-						std::cout << "current tail is " << currentTail->instCFGRegRepr() << std::endl;
+
 						if (currentTail->op == BRA) {
 							SSAValue* currentTailPrev = currentTail->prev;
 							currentTailPrev->next = moveInstr;
@@ -2242,12 +1613,6 @@ void SSA::cleanInstList() {
 						}
 
 
-						//SSAValue* currentTail = bbToAddMoveIn->tail;
-						//SSAValue* currentTailNext = currentTail->next;
-						//currentTail->next = moveInstr;
-						//moveInstr->prev = currentTail;
-						//moveInstr->next = currentTailNext;
-						//currentTailNext->prev = moveInstr;
 					} else {
 						
 						bbToAddMoveIn->head = moveInstr;
@@ -2281,9 +1646,6 @@ void SSA::cleanInstList() {
 
 			}
 			if (phiOperand2->regToMoveTo != 0 || phiOperand2->op == CONST) {
-				//BasicBlock* bbToAddMoveIn; //= phiOperand2->containingBB;
-
-				//SSAValue* moveInstr; //= SSACreateMove(phiOperand2->regNum, phiOperand2->regToMoveTo);
 
 				SSAValue* moveInstr;
 				BasicBlock* bbToAddMoveIn;
@@ -2303,7 +1665,7 @@ void SSA::cleanInstList() {
 				}
 				SSAValue* currentTail = bbToAddMoveIn->tail;
 				SSAValue* currentTailNext = currentTail->next;
-				std::cout << "current tail is " << currentTail->instCFGRegRepr() << std::endl;
+
 				if (currentTail->op == BRA) {
 					SSAValue* currentTailPrev = currentTail->prev;
 					currentTailPrev->next = moveInstr;
@@ -2322,8 +1684,7 @@ void SSA::cleanInstList() {
 					moveBB->id = maxBlockID++;
 					moveBB->funcName = funcName;
 					basicBlocks.push_back(moveBB);
-					//moveBB->head = moveInstr;
-					//moveBB->tail = moveInstr;
+
 					BasicBlock* joinBlock = bbToAddMoveIn->branch;
 					if (moveInstr->prev->op >= BNE && moveInstr->prev->op <= BGT) {
 						SSAValue* finalTarget = moveInstr->prev->operand2;
@@ -2416,8 +1777,6 @@ void SSA::cleanInstList() {
 			} else {
 				iterPrev->next = nullptr;
 			}
-			
-
 		}
 
 		if (iter != nullptr && iter->op == BRA) {
@@ -2443,6 +1802,7 @@ void SSA::cleanInstList() {
 					iter->containingBB->tail = nullptr;
 				}
 			}
+			
 		}
 
 		iter = iter->next;
